@@ -1,0 +1,3 @@
+# Dependencies for configuration validation and run preparation.
+# Model training is a separate integration step; see requirements-train.in.
+PyYAML==6.0.3

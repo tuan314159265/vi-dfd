@@ -1,0 +1,16 @@
+# DRAFT ONLY: resolve and lock on the selected GPU runtime after PARSeq integration.
+# Install the appropriate torch/torchvision pair for that runtime first.
+# No training environment has been validated by this scaffold.
+-r requirements.txt
+torch
+torchvision
+timm
+pytorch-lightning
+hydra-core
+numpy
+Pillow
+opencv-python-headless
+lmdb
+onnx
+onnxruntime
+tqdm

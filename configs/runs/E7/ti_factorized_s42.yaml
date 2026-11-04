@@ -1,0 +1,67 @@
+# TEMPLATE: fill data/training settings after E1; KD values are not selected results.
+experiment: E7
+stage: error_analysis
+variant: ti_factorized
+seed: 42
+model:
+  backbone: parseq_tiny
+  head: factorized
+  pretrained: true
+  teacher_backbone: null
+  teacher_checkpoint: null
+  eos_policy: to_be_verified
+data:
+  dataset: VinText
+  root: null
+  vocab_path: null
+  split_manifest: null
+  subset_manifest: null
+  image_size:
+  - 32
+  - 128
+  normalization: NFC
+  training_fraction: 1.0
+training:
+  epochs: null
+  batch_size: null
+  lr: null
+  optimizer: AdamW
+  schedule: one_cycle
+  amp: true
+  checkpoint_metric: validation_word_acc
+distillation:
+  enabled: false
+  mode: null
+  temperature: 2.0
+  lambda: 1.0
+  component_weights:
+    base: 1.0
+    modifier: 1.0
+    tone: 2.0
+  tone_confidence_weight: false
+composition:
+  validity_mask: true
+evaluation:
+  splits:
+  - validation
+  subsets:
+  - all
+  - diacritic_heavy
+  - small_crop
+  - rare_combination
+  case_sensitive: false
+  precision: fp32
+  cross_dataset: null
+  errors_per_model: 20
+benchmark:
+  runtime: onnxruntime
+  cpu_threads: 4
+  batch_size: 1
+  warmup_runs: 50
+  timed_runs: 500
+  statistic: median
+  gpu_batch_size: 64
+output:
+  root: results
+  save_predictions: true
+  save_resolved_config: true

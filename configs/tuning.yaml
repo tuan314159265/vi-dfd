@@ -1,0 +1,14 @@
+# Study policy, not a train.py run config.
+selection_split: validation
+tuning_seed: 42
+main_seeds: [42, 43, 44]
+dfd_grid:
+  temperature: [1, 2, 4]
+  lambda: [0.5, 1.0]
+  tone_weight: [1, 2]
+standard_kd_grid:
+  temperature: [1, 2, 4]
+  lambda: [0.5, 1.0]
+# DFD: 12 combinations; standard KD: 6. Set equal trial budgets before tuning.
+equal_budget_policy: null
+teacher_seed_policy: single_frozen_teacher_seed_42

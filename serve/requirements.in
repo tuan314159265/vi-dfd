@@ -1,0 +1,7 @@
+# Draft serving dependencies; pin/lock after validating an exported ONNX model.
+fastapi
+uvicorn
+onnxruntime
+Pillow
+numpy
+python-multipart
