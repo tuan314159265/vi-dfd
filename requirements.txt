@@ -1,3 +1,11 @@
 # Dependencies for configuration validation and run preparation.
 # Model training is a separate integration step; see requirements-train.in.
 PyYAML==6.0.3
+numpy>=1.26,<3
+pandas>=2.2,<3
+opencv-python>=4.10,<5
+Pillow>=10.4,<13
+matplotlib>=3.9,<4
+seaborn>=0.13,<1
+jupyterlab>=4.2,<5
+ipykernel>=6.29,<8
