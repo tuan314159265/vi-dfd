@@ -15,7 +15,7 @@ Theo cấu hình mô tả trong proposal [2]:
 1. **Patch embedding:** ảnh 32 × 128, patch 4 × 8 → 8 × 16 = 128 visual tokens.
 2. **ViT encoder:** 12 lớp Transformer tạo 128 visual feature vectors.
 3. **Visio-lingual decoder:** một lớp decoder, mỗi vị trí đầu ra có learned position query; attention tới context characters được permutation mask cho phép và visual features.
-4. **Classifier:** ánh xạ mỗi decoder output sang phân phối ký tự. Bản gốc mô tả 94 ký tự tiếng Anh + EOS; cấu hình tiếng Việt dự kiến 229 + EOS.
+4. **Classifier:** ánh xạ mỗi decoder output sang phân phối ký tự. Bản gốc mô tả 94 ký tự tiếng Anh + EOS; cấu hình tiếng Việt là 229 lớp (228 ký tự + EOS).
 
 Permutation language modeling lấy nhiều thứ tự output trong một batch. Inference có thể decode trái sang phải hoặc song song rồi refinement.
 
@@ -27,7 +27,7 @@ Permutation language modeling lấy nhiều thứ tự output trong một batch.
 | Encoder heads / MLP / layers | 6 / 1536 / 12 | 3 / 768 / 12 |
 | Decoder heads / MLP / layers | 12 / 1536 / 1 | 6 / 768 / 1 |
 | Tham số theo proposal | Khoảng 23.8M | Đo sau khi thay head |
-| Output head | Linear 229 + EOS | Baseline: linear 229 + EOS; DFD: ba head |
+| Output head | Linear 229 (228 ký tự + EOS) | Baseline: linear 229; DFD: ba head |
 | Khởi tạo | Official pretrained weights tiếng Anh | Official `parseq_tiny` weights |
 
 - [ ] Đối chiếu cấu hình và tên checkpoint với repo PARSeq trước khi triển khai.

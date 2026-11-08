@@ -28,10 +28,13 @@ The stage entry points intentionally fail with an actionable message until their
 backend is implemented. `/health` is available in the API skeleton; `/recognize`
 returns HTTP 501 rather than placeholder OCR predictions.
 
+## Decisions made
+
+- Vocabulary: 229 classes (228 characters + EOS at class 0), pending the data coverage check.
+- Heavy word: at least 2 characters carrying a tone, a modifier, or `đ/Đ`.
+
 ## Decisions to finalize
 
-- Exact character vocabulary and EOS handling (229 vs 230 wording in the proposal).
-- Heavy-word definition: tone marks, modifiers, or both.
 - Component ER denominators, insertion/deletion handling, alignment tie-breaking.
 - Standard-KD tuning allocation: DFD's listed grid has 12 trials vs KD's 6.
 - E4 teacher count: one teacher seed vs table wording of three seeds.

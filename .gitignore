@@ -33,3 +33,20 @@ checkpoints/
 results/runs/
 results/*.csv
 results/*.jsonl
+
+# Notebook outputs contain VinText transcripts; share them privately.
+results/eda/
+/dataset/
+/processed/
+*.mdb
+
+# Training and editor files
+lightning_logs/
+outputs/
+multirun/
+*.safetensors
+.vscode/
+.idea/
+.claude/
+Thumbs.db
+

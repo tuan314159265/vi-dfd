@@ -9,7 +9,7 @@ model:
   pretrained: true
   teacher_backbone: parseq_small
   teacher_checkpoint: null
-  eos_policy: to_be_verified
+  eos_policy: eos_class_0_none_level
 data:
   dataset: VinText
   root: null
@@ -49,8 +49,8 @@ evaluation:
   subsets:
   - all
   - diacritic_heavy
-  - small_crop
-  - rare_combination
+  - small_crops
+  - rare_combinations
   case_sensitive: false
   precision: fp32
   cross_dataset: null
