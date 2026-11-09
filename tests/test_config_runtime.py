@@ -12,10 +12,12 @@ from dfd.runtime import config_hash, prepare_run
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_research_choices_stay_unresolved_and_seed_is_validated():
+def test_shared_budget_is_fixed_but_data_and_teacher_stay_unresolved():
     config = load_config(ROOT / "configs/runs/E2/ti_dfd_s42.yaml")
     unresolved = validate_config(config)
-    assert "training.epochs" in unresolved
+    assert "data.root" in unresolved
+    assert config["training"]["epochs"] == 20
+    assert config["training"]["batch_size"] == 64
     assert "model.teacher_checkpoint" in unresolved
     assert config["model"]["head"] == "factorized"
     config["seed"] = True

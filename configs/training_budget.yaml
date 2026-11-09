@@ -1,0 +1,54 @@
+fixed_on: '2026-11-09'
+epochs: 20
+micro_batch_size: 64
+accumulate_grad_batches: 1
+effective_batch_size: 64
+optimizer: AdamW
+scheduler: OneCycleLR
+base_lr: 0.0007
+actual_peak_lr_single_gpu: 0.000175
+lr_rule: 'PARSeq: base_lr * micro_batch * accumulation / 256 * sqrt(num_devices)'
+warmup_pct: 0.075
+weight_decay: 0.0
+gradient_clip_val: 20.0
+augmentation: photometric_randaugment_m5_n3_no_geometric_operations
+max_label_length: 25
+epoch_budget_source: Pinned official PARSeq configs/main.yaml (20 epochs)
+batch_probe:
+  gpu: NVIDIA GeForce RTX 3060 Laptop GPU
+  initialization:
+    url: https://github.com/baudm/parseq/releases/download/v1.0.0/parseq-bb5792a6.pt
+    checkpoint_sha256: bb5792a68e367476abca029cbf8699abc805f3d3dc7e57aae45c8ec4f7b7cd00
+    copied_context_embeddings: 97
+    loaded_model_keys: 173
+    reset_keys:
+    - head.weight
+    - head.bias
+    output_classes: 229
+    tokenizer_tokens: 231
+  reports:
+  - batch_size: 16
+    success: true
+    peak_memory_mib: 687.33984375
+    memory_fraction: 0.1184328490813931
+    seconds: 2.5630974889991194
+    finite_loss: true
+  - batch_size: 32
+    success: true
+    peak_memory_mib: 1341.35693359375
+    memory_fraction: 0.23112398433629844
+    seconds: 0.4378435210001044
+    finite_loss: true
+  - batch_size: 64
+    success: true
+    peak_memory_mib: 2248.67138671875
+    memory_fraction: 0.3874598008518383
+    seconds: 0.26913152700035425
+    finite_loss: true
+  selected_micro_batch: 64
+  effective_batch: 64
+  accumulate_grad_batches: 1
+  note: Worst-length synthetic inputs; optimizer step included; not an accuracy experiment
+applies_to: All planned models; no per-model change based on test results
+note: Batch fit is measured. The 20-epoch accuracy/teacher credibility must still
+  be checked using validation.

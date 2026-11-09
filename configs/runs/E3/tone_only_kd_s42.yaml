@@ -1,4 +1,4 @@
-# TEMPLATE: fill data/training settings after E1; KD values are not selected results.
+# Shared E1/E2 budget fixed from the RTX 3060 batch probe; KD values remain tuning candidates.
 experiment: E3
 stage: train
 variant: tone_only_kd
@@ -22,13 +22,18 @@ data:
   normalization: NFC
   training_fraction: 1.0
 training:
-  epochs: null
-  batch_size: null
-  lr: null
+  epochs: 20
+  batch_size: 64
+  lr: 0.0007
   optimizer: AdamW
   schedule: one_cycle
   amp: true
   checkpoint_metric: validation_word_acc
+  accumulate_grad_batches: 1
+  warmup_pct: 0.075
+  weight_decay: 0.0
+  num_workers: 4
+  augmentation: photometric_randaugment_m5_n3
 distillation:
   enabled: true
   mode: marginal

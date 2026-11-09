@@ -11,10 +11,13 @@ This repository is an **initialized research scaffold**. Dataset exploration and
 - **Dataset overview — executed in a Jupyter notebook:** inspected VinText images, annotations and source splits; verified the counts recorded below.
 - **Task 1 — Word cropping — implemented in a Jupyter notebook:** reads source image/annotation pairs, filters ignored labels, normalizes NFC, performs perspective cropping, and writes `crops/` and `metadata.csv` under `processed/vintext_notebook/`.
 - **Task 2 — EDA — performed in a Jupyter notebook:** explores crop/annotation characteristics and Vietnamese text/diacritics. Specific plots/statistics should be cited from saved notebook outputs rather than assumed from this README.
-- **Task 3 — Splitting and LMDB — implemented in a Jupyter notebook:** automatic SHA-256/pHash grouping, grouped train/val split, evaluation subsets, freeze manifests/checksums, and four-way LMDB export. The notebook's saved outputs show all four LMDBs written and read back (train 23,269 / val 2,507 / test 7,201 / unseen test 10,068).
+- **Task 3 — Splitting and LMDB:** notebook pipeline reproduced locally on 09/11; all four LMDBs read back successfully. Train/val/test/unseen counts: 23,269 / 2,507 / 7,201 / 10,068 before training-only filtering. Frozen artifacts stay outside Git.
 - **Notebook implementation is separate from the `data/*.py` scaffold:** do not treat those Python files as the implementation of Tasks 1–3.
 - **Vocabulary and student head:** `dfd/vietchar.py` holds the 229-class table and marginalization matrices; `dfd/heads.py` holds the factorized head, verified on upstream PARSeq.
-- **Not implemented yet:** PARSeq training, DFD loss, complete dataset adapters, evaluation, ONNX benchmarking, and serving.
+- **Teacher pipeline implemented:** pinned PARSeq-S integration, pretrained English weights with a new 229-class head, Vietnamese-safe LMDB loading, validation and checkpointing. See [Task 9 instructions](docs/TEACHER.md).
+- **Shared budget fixed:** batch 64 / 20 epochs; CUDA memory probe recorded in `configs/training_budget.yaml`. Full teacher accuracy remains to be measured.
+- **Distillation and evaluation code:** DFD and standard KD losses with shared PARSeq permutations (`dfd/distill.py`, `dfd/parseq_kd.py`); component metrics and `eval.py` on the frozen splits (`dfd/metrics.py`, `dfd/evaluation.py`).
+- **Not implemented yet:** student training entry point in `train.py`, ONNX benchmarking, and serving.
 
 Prepared runs contain **no accuracy or latency measurements**. Dataset preprocessing and notebook code do not imply that training has been completed.
 
