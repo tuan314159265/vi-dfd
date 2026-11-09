@@ -149,6 +149,8 @@ def data_identity(config):
 
 
 def probe_batches(config, output):
+    if config["variant"] != "teacher" or config["model"]["backbone"] != "parseq_small":
+        raise ValueError("The teacher batch probe requires a PARSeq-S teacher config")
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is unavailable; run this outside the device-restricted sandbox")
     seed_everything(config["seed"])
@@ -198,7 +200,8 @@ def probe_batches(config, output):
 
 
 def run_teacher(config, repo, resume=None, smoke=False):
-    if config["variant"] != "teacher" or config["model"]["backbone"] != "parseq_small":
+    if (config["variant"] != "teacher" or config["model"]["backbone"] != "parseq_small"
+            or config["experiment"] != "E1" or config.get("stage", "train") != "train"):
         raise ValueError("This entry point currently supports only the E1 PARSeq-S teacher")
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA is unavailable; run outside the sandbox or use a GPU notebook")

@@ -15,7 +15,7 @@ This repository is an **initialized research scaffold**. Dataset exploration and
 - **Notebook implementation is separate from the `data/*.py` scaffold:** do not treat those Python files as the implementation of Tasks 1–3.
 - **Vocabulary and student head:** `dfd/vietchar.py` holds the 229-class table and marginalization matrices; `dfd/heads.py` holds the factorized head, verified on upstream PARSeq.
 - **Teacher pipeline implemented:** pinned PARSeq-S integration, pretrained English weights with a new 229-class head, Vietnamese-safe LMDB loading, validation and checkpointing. See [Task 9 instructions](docs/TEACHER.md).
-- **Shared budget fixed:** batch 64 / 20 epochs; CUDA memory probe recorded in `configs/training_budget.yaml`. Full teacher accuracy remains to be measured.
+- **Shared budget fixed:** batch 64 / 20 epochs; CUDA memory probe recorded in `configs/training_budget.yaml`. Teacher completed 20 epochs: best validation **88.67%**, heavy-word accuracy **91.26%** at epoch 18; [results/provenance](docs/RESULTS_E1_TEACHER.md).
 - **Distillation and evaluation code:** DFD and standard KD losses with shared PARSeq permutations (`dfd/distill.py`, `dfd/parseq_kd.py`); component metrics and `eval.py` on the frozen splits (`dfd/metrics.py`, `dfd/evaluation.py`).
 - **Not implemented yet:** student training entry point in `train.py`, ONNX benchmarking, and serving.
 

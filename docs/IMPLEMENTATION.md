@@ -1,6 +1,6 @@
 # Implementation state
 
-## Working in this initial repository
+## Working
 
 - YAML template loading/validation and unresolved-field reporting.
 - Fixed-seed utility for Python and installed NumPy/PyTorch.
@@ -9,30 +9,34 @@
 - Pure-Python NFC base/modifier/tone decomposition and composition.
 - One standalone YAML per listed run and a job manifest with model/seed identity.
 - Artifact-layout coverage check and exported Obsidian proposal notes.
+- Fixed 229-class vocabulary, mapping matrices and the factorized student head.
+- Notebook crop/split/LMDB pipeline, plus a headless runner and frozen-data verification.
+- PARSeq-S English initialization, new Vietnamese head, training, validation and checkpointing.
+- Shared batch 64 / 20 epochs, verified with a CUDA memory probe; see `configs/training_budget.yaml`.
+- Completed-run verification and a compact teacher weight export; see `docs/TEACHER.md`.
 
 ## Pending, in implementation order
 
-1. Verify VinText terms and actual annotation format; crop with perspective warp/margin.
-2. Freeze image-level split, near-duplicate groups, vocabulary and subsets.
-3. Finalize EOS/token handling; hand-verify vocabulary and fixed mapping matrices.
-4. Pin/integrate PARSeq and a GPU-compatible dependency lock; run E1.
-5. ~~Implement shared metrics with Levenshtein alignment, denominators and test cases.~~ Metrics by Task 10 (`dfd/metrics.py`); evaluation pipeline in `eval.py`.
-6. ~~Implement factorized torch head and valid-character log-probability composition.~~ Done (`dfd/heads.py`).
-7. ~~Implement standard KD and DFD with shared permutations/contexts and masked loss.~~ Done
-   (`dfd/distill.py`, `dfd/parseq_kd.py`); wiring into the training script waits for Task 9's code.
-8. ~~Finalize equal tuning budget before E2~~ (done: 12 trials each, `scripts/e2_tuning.py`); then run seeds 42/43/44.
-9. Run E3 priority ablations, paired FP32/INT8 E4, and generalization E5.
-10. Implement/export ONNX, benchmark on one machine (E6), analyze validation errors (E7).
-11. Implement `/recognize`, final CPU dependencies and the demo Docker image.
+1. Compare the locally reproduced frozen manifests with Tiến's originals before combining results.
+2. Implement/run remaining E1 baselines and assess teacher credibility on validation.
+3. ~~Implement shared metrics with Levenshtein alignment, denominators and test cases.~~ Metrics by Task 10 (`dfd/metrics.py`); evaluation pipeline in `eval.py`.
+4. ~~Implement factorized torch head and valid-character log-probability composition.~~ Done (`dfd/heads.py`).
+5. ~~Implement standard KD and DFD with shared permutations/contexts and masked loss.~~ Done
+   (`dfd/distill.py`, `dfd/parseq_kd.py`); wiring `DistilledPARSeq` into the student training entry point is next.
+6. ~~Finalize equal tuning budget before E2~~ (done: 12 trials each, `scripts/e2_tuning.py`); then run seeds 42/43/44.
+7. Run E3 priority ablations, paired FP32/INT8 E4, and generalization E5.
+8. Implement/export ONNX, benchmark on one machine (E6), analyze validation errors (E7).
+9. Implement `/recognize`, final CPU dependencies and the demo Docker image.
 
-`eval.py` is implemented. `train.py` still fails with an actionable message until the
-training backend from Task 9 is wired in. `/health` is available in the API skeleton; `/recognize`
+Teacher training and `eval.py` are implemented. Student training still fails with an
+actionable message. `/health` is available in the API skeleton; `/recognize`
 returns HTTP 501 rather than placeholder OCR predictions.
 
 ## Decisions made
 
-- Vocabulary: 229 classes (228 characters + EOS at class 0), checked against VinText. Spaces are removed from labels; crops containing `°` are dropped from training and counted as errors in evaluation.
+- Vocabulary: 229 classes (228 characters + EOS at class 0), checked against VinText. Spaces are removed from labels; the two training crops containing `°` are excluded from training and such crops count as errors in evaluation.
 - Heavy word: at least 2 characters carrying a tone, a modifier, or `đ/Đ`.
+- Shared budget: batch 64, accumulation 1, 20 epochs, AdamW/one-cycle with upstream LR scaling.
 - KD (`dfd/distill.py`, `dfd/parseq_kd.py`): teacher and student share images, permutations,
   context and masks; the teacher is frozen, in eval mode, outside the student's checkpoint and
   optimizer. CE and KD are means over valid target positions, pooled over permutations exactly
@@ -59,4 +63,5 @@ returns HTTP 501 rather than placeholder OCR predictions.
 - Valid decoding/scoring for the unmasked Cartesian-product ablation.
 
 `configs/tuning.yaml` is a study policy, not a model-run config accepted by train.py.
-The run templates contain candidate KD values only. Training settings stay unset until E1.
+The run templates contain candidate KD values only. The shared batch/epoch budget
+is fixed; model-specific data paths and KD choices still need to be resolved.

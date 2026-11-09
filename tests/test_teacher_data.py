@@ -1,7 +1,12 @@
 import io
 
-import lmdb
 import pytest
+
+lmdb = pytest.importorskip("lmdb")
+pytest.importorskip("torch")
+pytest.importorskip("torchvision")
+pytest.importorskip("PIL")
+
 from PIL import Image
 
 from dfd.teacher_data import VietnameseLmdb, is_heavy, normalize_label

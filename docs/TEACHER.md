@@ -57,6 +57,7 @@ Only NFC and the shared whitespace-removal convention are applied.
 Python 3.12. Install the matching CUDA builds before the teacher dependencies:
 
 ```bash
+uv venv --python 3.12 .venv
 uv pip install --python .venv/bin/python torch==2.5.1 torchvision==0.20.1 \
   --index-url https://download.pytorch.org/whl/cu124
 uv pip install --python .venv/bin/python -r requirements-teacher.txt -r requirements-dev.txt
@@ -108,6 +109,19 @@ Artifacts under `results/runs/<run_id>/`:
 - `validation.csv`: epoch, optimizer step, source/config hash, accuracy and 1-NED.
 - Lightning loss logs, `checkpoints/last.ckpt`, best validation checkpoint.
 - `training.json`: actual running/completed/failed status and best score/path.
+
+After the full run has completed:
+
+```bash
+python scripts/finish_teacher.py results/runs/<run_id>
+```
+
+This verifies finite tensors, vocabulary/class shapes, the source commit and the
+best checkpoint's CSV score. It writes `summary.json`, `summary.csv`, populated
+`metrics.csv` and `teacher_parseq_s_229.pt`. The compact export is compatible with
+`torch.load(..., weights_only=True)` and its tensors are checked for exact equality
+with the best checkpoint. Recorded validation scores come from AMP inference;
+perform a separate FP32 evaluation before the FP32/INT8 comparison in E4.
 
 Resume with `--resume <trusted-local-last.ckpt>` and the identical configuration/data.
 The checkpoint includes upstream permutation RNG state and Lightning optimizer/scheduler

@@ -1,6 +1,13 @@
 # Third-party sources and attribution
 
-No PARSeq/VietTDR source code or dataset has been copied into this scaffold.
+No upstream PARSeq/VietTDR implementation or dataset is vendored in this repository.
+
+The teacher imports PARSeq from a separate checkout pinned to
+`1902db043c029a7e03a3818c616c06600af574be`. Training/permutation logic and the
+AdamW/one-cycle optimizer remain upstream implementations. Keep that checkout's
+LICENSE/NOTICE. The pretrained English checkpoint URL and full SHA-256 are recorded
+with each run. Direct teacher dependencies are pinned in `requirements-teacher.txt`;
+the actual package environment is snapshotted in the run artifacts.
 
 Before integration:
 
@@ -19,4 +26,5 @@ Primary PARSeq references inspected while preparing the scaffold:
 - https://github.com/baudm/parseq/blob/main/LICENSE
 - https://github.com/baudm/parseq/blob/main/NOTICE
 
-These links identify upstream references, not a validated dependency lock or code import.
+These links identify upstream references. The pinned checkout and actual teacher
+environment are documented in `docs/TEACHER.md` and each run's metadata.
