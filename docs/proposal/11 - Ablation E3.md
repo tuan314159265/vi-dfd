@@ -32,7 +32,7 @@ Tách tác động của kiến trúc, marginalization và weighting. Mọi bi�
 
 - [ ] Bỏ validity mask có thể sinh triple không có Unicode character trong vocabulary: chốt cách decode và tính accuracy/invalid-output rate.
 - [ ] Chốt EOS cho cả joint distribution và unmasked ablation.
-- [ ] Chốt relative weights trong marginal + joint KD.
+- [x] Chốt relative weights trong marginal + joint KD: `joint_lambda = 1.0` (15/11/2026). Khi đó loss bằng đúng loss DFD đầy đủ cộng loss Joint KD, nên trả lời trực tiếp câu "hai tín hiệu có bổ sung nhau không". Không tuning thêm vì E3 giữ siêu tham số của E2 và biến thể chỉ có 1 seed. Hạn chế: tổng KD mạnh hơn, nên nếu biến thể này tốt hơn thì chưa chắc do bổ sung; báo cáo độ lớn `train/kl_joint` so với `train/kd` để diễn giải.
 - [ ] Phân biệt temperature sweep phục vụ ablation với tuning đã thực hiện ở E2.
 
 ## Mẫu bảng kết quả

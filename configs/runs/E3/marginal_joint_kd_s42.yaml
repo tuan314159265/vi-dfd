@@ -39,7 +39,7 @@ distillation:
     modifier: 1.0
     tone: 2.0
   tone_confidence_weight: true
-  joint_lambda: null
+  joint_lambda: 1.0  # = full DFD term + E3 joint_kd term; not tuned (decided 2026-11-15)
 composition:
   validity_mask: true
 evaluation:

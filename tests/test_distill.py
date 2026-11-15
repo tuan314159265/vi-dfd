@@ -233,11 +233,6 @@ def test_objective_from_every_kd_run_config():
     root = Path(__file__).resolve().parents[1] / "configs" / "runs"
     seen = set()
     for path in sorted(root.rglob("*.yaml")):
-        section = load_config(path)["distillation"]
-        if section.get("mode") == "marginal_and_joint" and section.get("joint_lambda") is None:
-            with pytest.raises(ValueError, match="joint_lambda"):
-                DistillationObjective.from_config(section)
-            continue
-        parsed = DistillationObjective.from_config(section)
+        parsed = DistillationObjective.from_config(load_config(path)["distillation"])
         seen.add((parsed.enabled, parsed.mode if parsed.enabled else None))
-    assert {(True, "marginal"), (True, "joint"), (False, None)} <= seen
+    assert {(True, "marginal"), (True, "joint"), (True, "marginal_and_joint"), (False, None)} <= seen

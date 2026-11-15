@@ -47,8 +47,14 @@ Phương án tài nguyên đã trao đổi: **mỗi người ưu tiên Colab Fre
 - Tuning một seed; sau đó giữ hyperparameters và train ba seed.
 - Cùng seed dùng cùng data order; giữ đồng nhất augmentation và các yếu tố kiểm soát được.
 
-> [!todo] Chốt ngân sách tuning
-> Grid DFD trên có 12 tổ hợp; grid $\tau\times\lambda$ của standard KD chỉ có 6. Bản gốc yêu cầu “same-size grid” nhưng chưa chỉ rõ 12 trial cho standard KD. Cần định nghĩa trước khi chạy.
+> [!note] Đã chốt ngân sách tuning (15/11/2026)
+> Standard KD dùng $\tau\in\{1,2,4\}$, $\lambda\in\{0.25,0.5,1,2\}$: 12 trial, bằng DFD. Lý do:
+> - Chọn trên validation với nhiều trial hơn thì điểm tốt nhất dễ cao hơn dù hai phương pháp ngang nhau. Cân số trial để bỏ lợi thế này.
+> - Giữ trục $\tau$ giống DFD để so trên cùng các $\tau$. Standard KD chỉ có $\tau$ và $\lambda$, nên muốn 12 = 3 × 4 thì $\lambda$ cần 4 giá trị. Trục $w_t$ của DFD cũng một phần là trục độ mạnh KD, $\lambda$ là phần tương ứng.
+> - {0.25, 0.5, 1, 2} đối xứng quanh {0.5, 1} trên thang log và chứa trọn 6 trial cũ.
+> - Ở $\tau=4,\lambda=2$ hệ số $\lambda\tau^2=32$ có thể làm train kém ổn định. Trial hỏng vẫn giữ trong bảng, không thay bằng trial khác.
+>
+> Ghi trong `configs/tuning.yaml` (`equal_budget_policy: equal_trials_12_kd_lambda_widened`).
 
 ## Quy ước bổ sung theo yêu cầu người dùng
 

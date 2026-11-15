@@ -20,16 +20,26 @@ def policy(tmp_path):
     return path
 
 
-def test_make_refuses_without_budget_policy(tmp_path):
+def test_make_refuses_without_budget_policy(policy, tmp_path):
+    data = yaml.safe_load(policy.read_text(encoding="utf-8"))
+    data["equal_budget_policy"] = None
+    policy.write_text(yaml.safe_dump(data), encoding="utf-8")
     with pytest.raises(SystemExit, match="equal_budget_policy"):
-        e2_tuning.make(ROOT / "configs/tuning.yaml", tmp_path / "out")
+        e2_tuning.make(policy, tmp_path / "out")
+
+
+def test_committed_policy_gives_equal_budgets():
+    data = yaml.safe_load((ROOT / "configs/tuning.yaml").read_text(encoding="utf-8"))
+    assert data["equal_budget_policy"]
+    assert len(e2_tuning.grid_trials(data, "ti_dfd")) == len(e2_tuning.grid_trials(data, "ti_kd")) == 12
+    assert data["standard_kd_grid"]["temperature"] == data["dfd_grid"]["temperature"]
 
 
 def test_make_writes_full_grids(policy, tmp_path):
     written = e2_tuning.make(policy, tmp_path / "out")
     names = {path.stem for path in written}
     assert len([name for name in names if name.startswith("ti_dfd")]) == 12
-    assert len([name for name in names if name.startswith("ti_kd")]) == 6
+    assert len([name for name in names if name.startswith("ti_kd")]) == 12
     config = yaml.safe_load((tmp_path / "out" / "ti_dfd_tau4_lam0.5_wt1.yaml").read_text(encoding="utf-8"))
     assert config["seed"] == 42 and config["stage"] == "tune"
     assert config["distillation"]["temperature"] == 4.0

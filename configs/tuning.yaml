@@ -8,7 +8,9 @@ dfd_grid:
   tone_weight: [1, 2]
 standard_kd_grid:
   temperature: [1, 2, 4]
-  lambda: [0.5, 1.0]
-# DFD: 12 combinations; standard KD: 6. Set equal trial budgets before tuning.
-equal_budget_policy: null
+  lambda: [0.25, 0.5, 1.0, 2.0]
+# DFD: 3 x 2 x 2 = 12 trials; standard KD: 3 x 4 = 12 trials (decided 2026-11-15).
+# KD keeps DFD's temperature axis; lambda widens symmetrically on a log scale and
+# contains the original {0.5, 1}. A diverged trial stays in the table; it is not replaced.
+equal_budget_policy: equal_trials_12_kd_lambda_widened
 teacher_seed_policy: single_frozen_teacher_seed_42

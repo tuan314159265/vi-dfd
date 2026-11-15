@@ -1,6 +1,6 @@
 # Tiến độ các task của Vinh
 
-Cập nhật: 15/11/2026. Task 7 và 11 nằm ở nhánh `feat/vocab-factorized-head`, tách từ `main`. Task 14 và phần chuẩn bị Task 15 nằm ở nhánh `feat/dfd-distillation`, tách từ `feat/vocab-factorized-head`. Các sửa cho notebook của Tiến nằm ở nhánh `feat/vintext-data-preparation`.
+Cập nhật: 15/11/2026. Task 7 và 11 nằm ở nhánh `feat/vocab-factorized-head`, tách từ `main`. Task 14, phần chuẩn bị Task 15 và `eval.py` (Task 26) nằm ở nhánh `feat/dfd-distillation`, tách từ `feat/vocab-factorized-head`. Nhánh này có cherry-pick commit metric của Tiến (`03109a4` → `88645f2`, giữ tác giả Tiến) để `eval.py` dùng được. Các sửa cho notebook của Tiến nằm ở nhánh `feat/vintext-data-preparation`.
 
 ## Trạng thái
 
@@ -10,9 +10,10 @@ Cập nhật: 15/11/2026. Task 7 và 11 nằm ở nhánh `feat/vocab-factorized-
 | 7 | Bảng phân rã ký tự | **Done** | Đã đối chiếu với charset VinText, bảng giữ nguyên 229 lớp |
 | 11 | Head phân rã cho student | **Done** | Đã kiểm chứng trên PARSeq thật |
 | 14 | Cài DFD và KD thường | **Done về code** | Đã chạy `Trainer.fit` trên PARSeq thật với teacher giả. Còn ghép vào script train của Tuấn khi Task 9 được push |
-| 15 | E2 sơ bộ, chọn siêu tham số | **Đang chờ** | Đã có script sinh grid và chọn cấu hình. Chờ teacher, recipe, pipeline đánh giá, quyết định ngân sách, mốc 13. Xem "Cần nhắc" |
+| 15 | E2 sơ bộ, chọn siêu tham số | **Đang chờ** | Đã có script sinh grid (12 + 12 trial) và chọn cấu hình, đã có `eval.py`. Chờ teacher, recipe, dữ liệu, mốc 13. Xem "Cần nhắc" |
 | 16 | E2 đủ 3 seed + E3 | Chờ Task 15 | |
 | 25 | Đóng gói và hoàn tất nội bộ | Chờ thí nghiệm và báo cáo | |
+| 26 | Pipeline đánh giá `eval.py` (task mới) | **Done về code** | Đã kiểm chứng trên LMDB giả và checkpoint PARSeq thật. Chưa chạy trên dữ liệu thật |
 
 Các task "Cả nhóm" (13, 20, 23, 24) phụ thuộc kết quả chưa có. Cho mốc 13 em đã chuẩn bị script đo thời gian step có KD.
 
@@ -23,12 +24,17 @@ Các task "Cả nhóm" (13, 20, 23, 24) phụ thuộc kết quả chưa có. Cho
 | **Tuấn** | Push code train teacher (Task 9) và chia sẻ checkpoint `.ckpt` qua kênh private | 14 (ghép), 15 | Repo chưa có code hay checkpoint của Task 9 dù bảng ghi Done. Checkpoint phải là checkpoint Lightning của `strhub` PARSeq, `charset_train` đúng 228 ký tự theo thứ tự bảng. Kiểm tra bằng lệnh ở mục "Ghép vào script train" |
 | **Tuấn** | Báo batch size, số epoch, lr đã chốt ở Task 9 | 15 | Để điền `training.*` (đang `null`) trong YAML của E2/E3. Báo kèm word acc validation của teacher |
 | **Tuấn** | Kết quả E1 (Task 12), nhất là Ti vanilla | 15, mốc 13 | Ti vanilla là mốc so sánh của E2 |
-| **Tiến** | Hoàn tất Task 10 và mở PR | 15 | Nhánh `origin/feat/metrics-evaluation` (commit `03109a4`, 15/11) đã có `dfd/metrics.py`, bảng vẫn ghi In progress |
+| **Tiến** | Hoàn tất Task 10 và mở PR | 15 | Nhánh `origin/feat/metrics-evaluation` (commit `03109a4`, 15/11) đã có `dfd/metrics.py`, bảng vẫn ghi In progress. Xem mục "Góp ý cho module metric" bên dưới |
 | **Tiến** | Gửi LMDB và `splits/` cho Vinh qua kênh private | 15 | Tài khoản GPU của Vinh cần dữ liệu để chạy |
-| **Cả nhóm** | Chọn người làm `eval.py`: chạy checkpoint trên LMDB, gọi `dfd/metrics.py`, ghi `metrics.csv` | 15 | Task 10 chỉ là module metric, Task 12 chỉ dùng nó. `scripts/e2_tuning.py select` cần mỗi run có một dòng `split=validation`, `subset=all` trong `metrics.csv` |
-| **Cả nhóm** | Chốt `equal_budget_policy` trong `configs/tuning.yaml` | 15 | Grid DFD có 12 trial, grid KD thường chỉ 6. Em đề xuất mở rộng $\lambda$ của KD thường thành {0.25, 0.5, 1, 2} để có 3 × 4 = 12 trial. `e2_tuning.py make` từ chối chạy khi giá trị này còn `null` |
 | **Cả nhóm (mốc 13)** | Chạy `scripts/time_kd_step.py` trên GPU thật | 13, 15 | Ra ms/step cho 4 biến thể và thời gian 1 epoch dự kiến, để chốt ngân sách GPU và số seed |
-| **Người chạy E3 (Tuấn)** | Chốt `joint_lambda` cho `marginal_joint_kd` | 16 | Loss báo lỗi khi giá trị còn `null`. Ngoài ra vẫn còn mở cách decode khi bỏ validity mask |
+| **Tuấn, Tiến** | Dùng `eval.py` cho E1, E4, E5 thay vì tự chấm điểm | 12, 17, 18 | VietOCR, CRNN và bản INT8/ONNX ghi file `source_id,prediction` rồi chấm bằng `--predictions-dir`, để mọi model chung mẫu số |
+| **Người chạy E3 (Tuấn)** | Chốt cách decode khi bỏ validity mask | 16 | `joint_lambda` đã chốt là 1.0 |
+
+## Đã chốt ngày 15/11
+
+- **Ngân sách tuning:** KD thường dùng $	au \in \{1, 2, 4\}$, $\lambda \in \{0.25, 0.5, 1, 2\}$, tức 12 trial, bằng DFD. Lý do ghi ở `docs/proposal/09`, đã ghi vào `configs/tuning.yaml`.
+- **`joint_lambda = 1.0`** cho `marginal_joint_kd`: loss bằng đúng DFD đầy đủ cộng Joint KD. Lý do ghi ở `docs/proposal/11`, đã ghi vào YAML.
+- **`eval.py` do Vinh phụ trách** (Task 26).
 
 ## Task 7: bảng phân rã ký tự
 
@@ -122,7 +128,7 @@ trainer.fit(student, datamodule)
 
 ## Task 15: phần đã chuẩn bị
 
-- `scripts/e2_tuning.py make` sinh 1 YAML cho mỗi trial, seed 42, chỉ đánh giá trên validation, vào `configs/tuning_runs/E2/`. Grid lấy từ `configs/tuning.yaml`. Script từ chối chạy khi `equal_budget_policy` còn `null`.
+- `scripts/e2_tuning.py make` sinh 1 YAML cho mỗi trial, seed 42, chỉ đánh giá trên validation, vào `configs/tuning_runs/E2/`. Grid lấy từ `configs/tuning.yaml`: 12 trial DFD và 12 trial KD thường. Script từ chối chạy khi `equal_budget_policy` còn `null`.
 - `scripts/e2_tuning.py select` đọc `results/runs/*/resolved.yaml` và `metrics.csv`, xếp hạng theo word acc validation, hòa thì xét 1-NED rồi thứ tự grid. Nó in cả các trial chưa có kết quả.
 - `scripts/time_kd_step.py` đo ms/step và bộ nhớ đỉnh cho `ti_ce`, `ti_factorized`, `ti_kd`, `ti_dfd` với kích thước Ti/S chính thức. Lệnh cho mốc 13, thay số crop train thật vào:
 
@@ -131,6 +137,43 @@ trainer.fit(student, datamodule)
   ```
 
 - Khi đủ điều kiện: điền `training.*`, `data.*`, `model.teacher_checkpoint` vào hai YAML gốc E2 (`ti_dfd_s42`, `ti_kd_s42`), chạy `make`, train từng trial, chạy `select`, rồi ghi cấu hình đã chọn vào 12 YAML E2 ba seed. Nếu xin compute, gửi bảng kết quả `select` cho giảng viên.
+
+## Task 26: pipeline đánh giá `eval.py`
+
+File: `eval.py`, `dfd/evaluation.py`, `tests/test_evaluation.py`.
+
+```bash
+# PARSeq (teacher, ti_ce, ti_kd, ti_factorized, ti_dfd, E3): tự nhận head thường hay head phân rã
+python eval.py --run-dir results/runs/<run_id> --checkpoint best.ckpt     --data-root <processed>/lmdb --subset-dir <processed>/splits/subsets
+
+# Model khác (VietOCR, CRNN, ONNX/INT8): <dir>/<split>.csv gồm cột source_id,prediction
+python eval.py --run-dir results/runs/<run_id> --predictions-dir <dir> --data-root ... --subset-dir ...
+```
+
+- Không có `--run-dir` thì dùng `--config`, và script tự tạo run mới bằng `prepare_run` (cần Git sạch). Split và subset lấy từ mục `evaluation` của YAML, có thể ghi đè bằng `--splits`, `--subsets`.
+- Tự đọc LMDB, **không lọc mẫu nào**, khác `LmdbDataset` của PARSeq. Nhãn dài hơn 25 ký tự hay chứa ký tự ngoài bảng (`°`) vẫn được giữ và tính là sai, nên mọi model chung mẫu số.
+- Chuẩn hóa nhãn và dự đoán: NFC, bỏ dấu cách, chuyển chữ thường (protocol không phân biệt hoa/thường). Ký tự nhãn ngoài bảng được thay bằng ký hiệu không hợp lệ của module metric, nên crop đó tính là sai. Dấu thanh giữ nguyên vị trí (`hoà` ≠ `hòa`).
+- Subset nối bằng `source-id` (`image_id:line_number`). Script báo lỗi nếu file subset có mẫu không có trong LMDB.
+- Tên split trong YAML và `metrics.csv` là `validation`, `test`, `unseen_test`, ứng với thư mục LMDB `val`, `test`, `unseen_test`.
+- Ghi vào thư mục run:
+  - `metrics.csv`: một dòng cho mỗi split × subset, kèm commit hash, config hash, seed, số tham số.
+  - `predictions/<split>.csv`: dự đoán từng mẫu, dùng cho phân tích lỗi (Task 21).
+  - `tone_confusion/<split>_<subset>.json`: ma trận nhầm thanh (Task 17).
+  - `eval_info.json`: SHA-256 của checkpoint và của từng LMDB, fingerprint bảng ký tự, số nhãn chứa ký tự ngoài bảng.
+- Không ghi đè dòng đã có trong `metrics.csv` trừ khi thêm `--replace`. Subset rỗng thì bỏ qua và báo.
+- Checkpoint chỉ chấm ở FP32. INT8 chấm qua `--predictions-dir`, với `precision` lấy từ YAML (E4).
+
+Kiểm chứng (6 test): LMDB và subset giả gồm nhãn có `°`, nhãn 30 ký tự, khác hoa/thường, sai thanh, khác vị trí dấu; chạy đủ hai chế độ. Checkpoint PARSeq có head phân rã được lưu rồi nạp lại, cho cùng dự đoán với model gốc.
+
+## Góp ý cho module metric (gửi Tiến)
+
+Phát hiện khi ghép `eval.py` với `dfd/metrics.py`:
+
+1. **Ký hiệu không hợp lệ `|` trùng một lớp hợp lệ của bảng 229 lớp** (`|` là ký tự ASCII trong bảng). Nếu model dự đoán ra `|`, crop đó bị cho 1-NED = 0 và lỗi toàn bộ thành phần, thay vì được tính một phần. Nhãn VinText không có `|`, nên word acc không đổi, nhưng 1-NED và ER bị lệch nhẹ. Đề xuất đổi `INVALID_CHARACTER` sang một ký tự ngoài bảng, ví dụ `"�"`. `eval.py` dùng hằng số này nên tự theo.
+2. **Module chưa xử lý không phân biệt hoa/thường.** `eval.py` đã chuyển chữ thường trước khi gọi, nên không cần sửa, chỉ cần biết để không làm hai lần.
+3. `evaluate_predictions` được định nghĩa hai lần (bản stub cũ ở đầu file).
+4. `rapidfuzz` chưa pin phiên bản. Trên nhánh này em đã pin `rapidfuzz==3.10.1`.
+5. Vẫn cần chốt và ghi lại: mẫu số của Component ER (hiện là `max(len)`), và việc insert/delete tính lỗi cho cả ba thành phần. `eval.py` ghi thêm tổng số ký tự chèn và xóa vào cột `insertions`, `deletions`.
 
 ## Rà soát việc của Tiến (Task 4, 5, 6)
 
@@ -180,7 +223,7 @@ Các quyết định đã ghi vào `docs/proposal/` và `docs/IMPLEMENTATION.md`
 
 | Kiểm tra | Kết quả |
 |---|---|
-| `pytest` toàn repo, PyTorch CPU, có PARSeq | 83 passed (15/11, gồm 36 test mới của Task 14, 15) |
+| `pytest` toàn repo, PyTorch CPU, có PARSeq | 132 passed (15/11, gồm test của Task 14, 15, 26 và 43 test metric của Tiến) |
 | `scripts/check_scaffold.py` | Pass |
 | Biên dịch mọi code cell của 4 notebook | Pass |
 
