@@ -25,7 +25,7 @@ def main() -> int:
     with (ROOT / "configs/run_manifest.csv").open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
     paths = [row["config"] for row in rows]
-    expected = {str(path.relative_to(ROOT)) for path in (ROOT / "configs/runs").rglob("*.yaml")}
+    expected = {path.relative_to(ROOT).as_posix() for path in (ROOT / "configs/runs").rglob("*.yaml")}
     if not rows or len(set(paths)) != len(paths) or set(paths) != expected:
         raise SystemExit("Run manifest is empty, duplicated, or differs from YAML files")
     for row in rows:

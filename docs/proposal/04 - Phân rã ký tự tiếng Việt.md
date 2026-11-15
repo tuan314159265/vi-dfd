@@ -29,7 +29,7 @@ $$c \longmapsto (b(c),m(c),t(c))$$
 - **Base:** chữ hoa/thường, chữ số, dấu câu và EOS; khoảng 95 lớp, chốt từ character set thực tế.
 - **Modifier:** 5 lớp — none, circumflex, breve, horn, bar.
 - **Tone:** 6 lớp — ngang, sắc, huyền, hỏi, ngã, nặng.
-- **Composed vocabulary:** 229 ký tự + EOS theo proposal.
+- **Composed vocabulary:** 229 lớp gồm 228 ký tự (94 ASCII + 134 chữ tiếng Việt) và EOS.
 
 Chỉ các triple có trong vocabulary mới hợp lệ. Ví dụ `q + tilde` không đại diện cho ký tự hợp lệ trong bộ này.
 
@@ -47,12 +47,12 @@ Mỗi hàng của $M_x$ ánh xạ một ký tự sang đúng một component cla
 - [ ] Chuẩn hóa NFC trước khi phân rã.
 - [ ] Giữ phân biệt hoa/thường trong bảng; xử lý case-insensitive tại evaluation theo protocol.
 - [ ] Kiểm tra round trip `compose(decompose(c)) == c` cho toàn bộ vocabulary.
-- [ ] Chốt cách biểu diễn EOS ở ba head và các token điều khiển của PARSeq.
-- [ ] Chốt cách xử lý ký tự ngoài vocabulary.
+- [x] Chốt cách biểu diễn EOS ở ba head và các token điều khiển của PARSeq.
+- [x] Chốt cách xử lý ký tự ngoài vocabulary: train bỏ crop đó; val/test giữ nguyên nhãn và tính là sai; không để `CharsetAdapter` của PARSeq âm thầm xóa ký tự.
 - [ ] Kiểm tra không có hai ký tự khác nhau dùng cùng triple.
 - [ ] Hand-verify các dấu kép và đ/Đ; lưu bảng với phiên bản cố định.
 
-> [!todo] Điểm chưa chốt trong bản gốc
-> Một số chỗ ghi teacher 229-way, các chỗ khác ghi 229 + EOS = 230-way. Cần thống nhất vocabulary, EOS và shape của cả ba ma trận trước khi code loss.
+> [!note] Đã chốt
+> Teacher và student đều 229 lớp, gồm EOS ở lớp 0 theo thứ tự đầu ra của PARSeq. EOS là triple `([EOS], none, level)`. Ba ma trận có shape `229 × 95`, `229 × 5`, `229 × 6`. Còn phải đối chiếu danh sách ký tự thực tế bằng `scripts/check_vocab_coverage.py`.
 
 Xem [05 - Factorized output head](05%20-%20Factorized%20output%20head.md), [06 - DFD và hàm mất mát](06%20-%20DFD%20v%C3%A0%20h%C3%A0m%20m%E1%BA%A5t%20m%C3%A1t.md).

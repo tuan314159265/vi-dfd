@@ -12,8 +12,8 @@ tags: [BTL, DeepLearning, OCR, Vi-DFD]
 
 | Model | Head | Objective | Mục đích |
 |---|---|---|---|
-| Ti vanilla | Single 230-way | CE ký tự | Mốc student thường |
-| Ti + standard KD | Single 230-way | CE + full-vocabulary KL từ teacher | So với KD thông thường [5] |
+| Ti vanilla | Single 229-way | CE ký tự | Mốc student thường |
+| Ti + standard KD | Single 229-way | CE + full-vocabulary KL từ teacher | So với KD thông thường [5] |
 | Ti + factorized head, no KD | Ba head | CE components | Tách hiệu ứng của head |
 | Ti + DFD — ours | Ba head | CE components + marginal KL | Phương pháp đề xuất |
 

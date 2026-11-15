@@ -12,7 +12,7 @@ Thiết kế kế thừa ý tưởng của VietTDR [3], không nhận là đóng
 
 ## Ba head song song
 
-Thay classifier đơn khoảng 230 lớp bằng:
+Thay classifier đơn 229 lớp bằng:
 
 $$p_S^x(\cdot\mid i)=\operatorname{softmax}(W_xh_i),\qquad x\in\{b,m,t\}.$$
 

@@ -12,7 +12,7 @@ tags: [BTL, DeepLearning, OCR, Vi-DFD]
 
 | Dataset | Vai trò | Quy mô ghi trong bản gốc | Trạng thái/điều khoản ghi trong bản gốc |
 |---|---|---|---|
-| VinText [1,11] | Train, validation, test chính | 2,000 ảnh, khoảng 56K text instances; 1,200 train / 500 test / 300 unseen test | Research/education; không phân phối lại; phải trích dẫn |
+| VinText [1,11] | Train, validation, test chính | 2,000 ảnh, khoảng 56K text instances; 1,200 train / 300 test / 500 unseen test | Research/education; không phân phối lại; phải trích dẫn |
 | VnSceneText [12] | Cross-dataset test | Khoảng 3,000 ảnh scene tiếng Việt | Cần xin tác giả |
 | Synthetic Vietnamese words | Optional pretraining, bổ sung tổ hợp hiếm | 0.5–1M crop tự sinh | Dữ liệu nhóm tạo |
 | MC-OCR 2021 [13] | Optional out-of-domain test hóa đơn | 2,436 ảnh | Cần kiểm tra điều khoản trên challenge site |
@@ -40,6 +40,8 @@ tags: [BTL, DeepLearning, OCR, Vi-DFD]
 
 Nếu phát hiện duplicate group cắt qua official split, cần ghi rõ cách xử lý và phần nào khác official protocol; không âm thầm đổi split.
 
+**Đã chốt:** cặp `im0894` (train) và `im1670` (unseen test), pHash distance 4, giữ nguyên split chính thức và ghi vào phần giới hạn của báo cáo.
+
 ## Subset dự kiến
 
 | Subset | Định nghĩa trong proposal |
@@ -49,10 +51,10 @@ Nếu phát hiện duplicate group cắt qua official split, cần ghi rõ cách
 | Rare combination | Tổ hợp xuất hiện < 20 lần trên training split |
 | Unseen test | Split riêng của VinText |
 
-- [ ] Chốt “mang dấu” gồm modifier, tone hay cả hai.
-- [ ] Chốt rare combination theo triple và cách đưa một từ vào subset.
-- [ ] Ghi height trước resize và trước/sau margin một cách nhất quán.
-- [ ] Chốt quy ước tone placement và tác động lên nhãn chính thức.
+- [x] “Mang dấu” gồm modifier, tone hoặc cả hai, và tính cả `đ/Đ`.
+- [x] Rare combination theo (base không phân biệt hoa/thường, modifier, tone), khớp cách chấm không phân biệt hoa/thường. Từ thuộc subset nếu chứa ít nhất một tổ hợp hiếm.
+- [x] Height là `original_word_height`, đo trên tứ giác gốc, trước margin và trước resize.
+- [x] Giữ nguyên vị trí dấu thanh như nhãn gốc (chỉ NFC), không viết lại `hoà/hòa`, vì nhãn phải khớp chữ trong ảnh.
 
 ## Synthetic pretraining
 
