@@ -1,3 +1,4 @@
-# Dependencies for configuration validation and run preparation.
+# Dependencies for configuration validation, run preparation and metrics.
 # Model training is a separate integration step; see requirements-train.in.
 PyYAML==6.0.3
+rapidfuzz==3.10.1
