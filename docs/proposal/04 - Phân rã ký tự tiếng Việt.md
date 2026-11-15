@@ -43,16 +43,16 @@ Mỗi hàng của $M_x$ ánh xạ một ký tự sang đúng một component cla
 
 ## Checklist cho `dfd/vietchar.py`
 
-- [ ] Chốt danh sách ký tự thực tế và thứ tự class; không suy ra chỉ từ con số 229.
-- [ ] Chuẩn hóa NFC trước khi phân rã.
-- [ ] Giữ phân biệt hoa/thường trong bảng; xử lý case-insensitive tại evaluation theo protocol.
-- [ ] Kiểm tra round trip `compose(decompose(c)) == c` cho toàn bộ vocabulary.
+- [x] Chốt danh sách ký tự thực tế và thứ tự class; không suy ra chỉ từ con số 229.
+- [x] Chuẩn hóa NFC trước khi phân rã.
+- [x] Giữ phân biệt hoa/thường trong bảng; xử lý case-insensitive tại evaluation theo protocol.
+- [x] Kiểm tra round trip `compose(decompose(c)) == c` cho toàn bộ vocabulary.
 - [x] Chốt cách biểu diễn EOS ở ba head và các token điều khiển của PARSeq.
 - [x] Chốt cách xử lý ký tự ngoài vocabulary: train bỏ crop đó; val/test giữ nguyên nhãn và tính là sai; không để `CharsetAdapter` của PARSeq âm thầm xóa ký tự.
-- [ ] Kiểm tra không có hai ký tự khác nhau dùng cùng triple.
-- [ ] Hand-verify các dấu kép và đ/Đ; lưu bảng với phiên bản cố định.
+- [x] Kiểm tra không có hai ký tự khác nhau dùng cùng triple.
+- [x] Hand-verify các dấu kép và đ/Đ; lưu bảng với phiên bản cố định.
 
 > [!note] Đã chốt
-> Teacher và student đều 229 lớp, gồm EOS ở lớp 0 theo thứ tự đầu ra của PARSeq. EOS là triple `([EOS], none, level)`. Ba ma trận có shape `229 × 95`, `229 × 5`, `229 × 6`. Còn phải đối chiếu danh sách ký tự thực tế bằng `scripts/check_vocab_coverage.py`.
+> Teacher và student đều 229 lớp, gồm EOS ở lớp 0 theo thứ tự đầu ra của PARSeq. EOS là triple `([EOS], none, level)`. Ba ma trận có shape `229 × 95`, `229 × 5`, `229 × 6`. Đã đối chiếu với VinText: ngoài bảng chỉ có dấu cách (bỏ khỏi nhãn) và `°` (train bỏ crop; val/test giữ nhãn và tính là sai); `|` và `Ỵ` có trong bảng nhưng không xuất hiện trong dữ liệu.
 
 Xem [05 - Factorized output head](05%20-%20Factorized%20output%20head.md), [06 - DFD và hàm mất mát](06%20-%20DFD%20v%C3%A0%20h%C3%A0m%20m%E1%BA%A5t%20m%C3%A1t.md).

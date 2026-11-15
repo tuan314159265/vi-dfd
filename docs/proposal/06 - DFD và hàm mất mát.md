@@ -43,9 +43,15 @@ Trong đó:
 
 Teacher và student nhận **cùng ảnh đã augmentation, cùng permutation, cùng ground-truth context**. Teacher chạy không gradients. Điều này đảm bảo matching đúng vị trí và cùng thông tin context; không dùng hai chuỗi tự sinh độc lập rồi KL theo index.
 
-- [ ] Mask padding và xử lý EOS nhất quán.
-- [ ] Chốt loss reduction theo valid positions, batch và các permutation.
-- [ ] Log riêng CE/KL theo component để theo dõi độ lớn loss.
+- [x] Mask padding và xử lý EOS nhất quán.
+- [x] Chốt loss reduction theo valid positions, batch và các permutation.
+- [x] Log riêng CE/KL theo component để theo dõi độ lớn loss.
+
+> [!note] Đã chốt (cài trong `dfd/distill.py`, `dfd/parseq_kd.py`)
+> - CE và KD cùng mask: vị trí có target là padding bị bỏ. Giống PARSeq gốc, target EOS được tính ở hai hoán vị đầu (thuận, ngược) và bị bỏ ở các hoán vị sau, cho cả CE lẫn KD. Ở vị trí EOS, marginal của teacher gồm `[EOS]` ở base, `none`, `level`.
+> - Mỗi số hạng là trung bình theo vị trí hợp lệ, gộp mọi hoán vị theo số target hợp lệ của từng lượt, đúng cách PARSeq gốc tính CE. $\alpha_i$ chỉ làm giảm KD của vị trí, không chia lại cho $\sum\alpha_i$.
+> - Log riêng: `ce_base`, `ce_modifier`, `ce_tone`, `kl_base`, `kl_modifier`, `kl_tone`, `kl_joint`, `kd`, `alpha`.
+> - $\alpha_i$ tính trên tone marginal của teacher **đã làm mềm bằng $\tau$**, đúng định nghĩa $p^t_{T,i}$ ở trên. Hệ quả: $\tau$ lớn thì $\alpha_i$ nhỏ đi, nên trong E3 bỏ tone weighting và quét $\tau$, hai yếu tố này không độc lập. Cần ghi điều này khi diễn giải kết quả.
 
 ## Tone-focused weighting — biến thể nhỏ
 
