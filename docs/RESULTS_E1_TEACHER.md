@@ -9,6 +9,7 @@ Task 9: completed locally on branch `feat/teacher-parseq-s`.
 | Initialization | Official English `parseq-bb5792a6.pt`; new output head; 97 shared context embeddings remapped |
 | GPU | NVIDIA GeForce RTX 3060 Laptop GPU, 6 GB |
 | Training | 20 epochs, batch 64, seed 42, 7,280 optimizer steps |
+| Learning rate | AdamW + OneCycleLR; base LR 7e-4; actual peak LR 1.75e-4 on one GPU |
 | Training duration | 29.63 minutes |
 | Train samples | 23,267; two unsupported degree-symbol samples excluded |
 | Validation samples | 2,507, including one label longer than 25 characters |
@@ -29,6 +30,15 @@ Validation was performed by the AMP trainer; E4 requires its own FP32 evaluation
 - Upstream PARSeq: `1902db043c029a7e03a3818c616c06600af574be`.
 - Exported weights SHA-256: `83144cf851e1850671da94d7dc2e4d86e26688c5b621bdb1ef63ee8f2b1a99c1`.
 - `configs/training_budget.yaml` records the common batch/epoch budget and CUDA probe.
+
+## Handoff and machine-readable results (2026-11-16)
+
+- [Teacher summary CSV](e1/teacher_s42_summary.csv): source/config hash, seed, budget and selected-checkpoint metrics.
+- [Validation history CSV](e1/teacher_s42_validation.csv): all 20 epochs.
+- Best Lightning `.ckpt` SHA-256: `e185cec4c1cb68d970a8cdd84e4c482ecd1dd4799c26a642f244117ad37bd609`.
+- Private handoff ZIP: `Vi-DFD_Task9_Teacher_E1_20261109.zip`, containing the best `.ckpt`, results, configs and checksums. Share the ZIP privately; it is excluded from Git.
+- The selected checkpoint filename uses zero-based epoch 17, corresponding to epoch 18 in the tables.
+- This provides the teacher portion of Task 12; the full E1 baseline comparison remains pending.
 
 ## Local artifacts
 
