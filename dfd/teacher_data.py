@@ -1,6 +1,9 @@
 """LMDB loading that retains Vietnamese marks and the complete validation denominator."""
 
+import csv
+import hashlib
 import io
+import math
 import os
 import unicodedata
 from pathlib import Path
@@ -98,3 +101,47 @@ class VietnameseLmdb(Dataset):
         state = self.__dict__.copy()
         state["env"] = None
         return state
+
+
+SUBSAMPLE_SEED = 42  # fixed for every E5 run, independent of the training seed
+
+
+def training_images(root):
+    """Training image id -> duplicate group id, from the frozen split assignment."""
+    path = Path(root) / "splits/manifests/image_split_assignments.csv"
+    with path.open(encoding="utf-8-sig", newline="") as handle:
+        return {int(row["image_id"]): int(row["duplicate_group_id"])
+                for row in csv.DictReader(handle) if row["final_split"] == "train"}
+
+
+def select_training_images(images, fraction, seed=SUBSAMPLE_SEED):
+    """E5 rule: keep whole duplicate groups of training images, in a seeded hash order,
+    until at least ceil(fraction * #images) images are kept. Nested: 25% is inside 50%."""
+    if not 0 < fraction <= 1:
+        raise ValueError(f"training_fraction must be in (0, 1], got {fraction}")
+    groups = {}
+    for image, group in images.items():
+        groups.setdefault(group, []).append(image)
+    order = sorted(groups, key=lambda group: hashlib.sha256(f"e5:{seed}:{group}".encode()).hexdigest())
+    target = math.ceil(fraction * len(images))
+    selected = set()
+    for group in order:
+        if len(selected) >= target:
+            break
+        selected.update(groups[group])
+    return selected
+
+
+def subsample_training(dataset, root, fraction, seed=SUBSAMPLE_SEED):
+    """Filter a training `VietnameseLmdb` in place to the E5 image subset; returns a record."""
+    images = training_images(root)
+    selected = select_training_images(images, fraction, seed)
+    before = len(dataset.rows)
+    dataset.rows = [row for row in dataset.rows if int(row[2].split(":")[0]) in selected]
+    record = {
+        "fraction": fraction, "seed": seed, "rule": "whole duplicate groups, sha256 order, ceil(fraction*images)",
+        "images": len(selected), "images_total": len(images), "crops": len(dataset.rows), "crops_before": before,
+        "image_ids_sha256": hashlib.sha256(",".join(map(str, sorted(selected))).encode()).hexdigest(),
+    }
+    dataset.audit["subset"] = record
+    return record

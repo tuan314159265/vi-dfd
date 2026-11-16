@@ -88,15 +88,49 @@ def test_english_initialization_accepts_tiny_width(tmp_path):
 
 
 @pytest.mark.parametrize("edit, message", [
-    (lambda c: c["data"].update(training_fraction=0.25), "training_fraction"),
     (lambda c: c.setdefault("composition", {}).update(validity_mask=False), "no_validity_mask"),
     (lambda c: c["model"].update(backbone="parseq_small"), "PARSeq-Ti"),
     (lambda c: c.update(stage="evaluate"), "PARSeq-Ti"),
     # E2 tuning trials (stage "tune") pass the stage check and reach the next guard.
-    (lambda c: (c.update(stage="tune"), c["data"].update(training_fraction=0.5)), "training_fraction"),
+    (lambda c: (c.update(stage="tune"), c.setdefault("composition", {}).update(validity_mask=False)), "no_validity_mask"),
 ])
 def test_run_student_refuses_unsupported_runs(edit, message):
     cfg = config("E2/ti_dfd_s42.yaml")
     edit(cfg)
     with pytest.raises(ValueError, match=message):
         student.run_student(cfg, ROOT)
+
+
+def test_unmasked_decoding_marks_only_invalid_triples():
+    import io as _io
+
+    from PIL import Image
+
+    from dfd.metrics import INVALID_CHARACTER
+
+    torch.manual_seed(0)
+    model, _ = student.build_student(config("E2/ti_dfd_s42.yaml"), TABLE, pretrained=False, size=NARROW)
+    model.eval()
+    content = _io.BytesIO()
+    Image.new("RGB", (128, 32), "white").save(content, format="PNG")
+    samples = [evaluation.Sample(f"1:{i}", "a", content.getvalue()) for i in range(3)]
+    masked = evaluation.predict_parseq(model, samples, batch_size=2)
+    stats = {}
+    unmasked = evaluation.predict_parseq(model, samples, batch_size=2, validity_mask=False, stats=stats)
+    assert stats["positions"] > 0
+    for plain_text, marked in zip(masked, unmasked):  # same text wherever the triple is valid
+        assert all(m == INVALID_CHARACTER or m == p for p, m in zip(plain_text, marked))
+    # Force base "q" with tone "tilde" everywhere: never a character, so every position is invalid.
+    head = model.model.head
+    with torch.no_grad():
+        head.weight.zero_()
+        head.bias.zero_()
+        head.bias[TABLE.classes("base").index("q")] = 50
+        head.bias[sum(head.sizes[:2]) + TABLE.classes("tone").index("tilde")] = 50
+    stats = {}
+    unmasked = evaluation.predict_parseq(model, samples, batch_size=2, validity_mask=False, stats=stats)
+    assert stats["invalid_triples"] == stats["positions"]
+    assert all(text and set(text) == {INVALID_CHARACTER} for text in unmasked)
+    with pytest.raises(ValueError, match="factorized"):
+        plain_model, _ = student.build_student(config("E2/ti_kd_s42.yaml"), TABLE, pretrained=False, size=NARROW)
+        evaluation.predict_parseq(plain_model, samples, validity_mask=False)

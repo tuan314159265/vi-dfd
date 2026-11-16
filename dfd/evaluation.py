@@ -180,21 +180,68 @@ def load_parseq_checkpoint(path: str, table: DecompositionTable, device: str = "
     return system.eval().to(device)
 
 
-def predict_parseq(system, samples: list[Sample], batch_size: int = 256, device: str = "cpu") -> list[str]:
-    """Greedy PARSeq decoding (the model's own AR + refinement settings), no length filtering."""
+def predict_parseq(system, samples: list[Sample], batch_size: int = 256, device: str = "cpu",
+                   validity_mask: bool = True, stats: dict | None = None) -> list[str]:
+    """Greedy PARSeq decoding (the model's own AR + refinement settings), no length filtering.
+
+    `validity_mask=False` is the E3 `no_validity_mask` ablation and needs a factorized head.
+    Decoding runs exactly as for full DFD (same AR contexts, same refinement), and at every
+    output position up to and including EOS the independent argmax triple
+    (base, modifier, tone) is also taken from the final component logits. Where that triple
+    is a valid character it equals the masked prediction (the masked argmax is the maximum of
+    the same product restricted to valid triples), so the output is unchanged. Where it is not
+    a character, the position becomes `metrics.INVALID_CHARACTER`, so the crop counts as wrong.
+    The word-accuracy difference to full DFD is therefore exactly the effect of the mask.
+    `stats` (if given) receives the number of positions and of invalid triples.
+    """
     import torch
     from PIL import Image
     from strhub.data.module import SceneTextDataModule
 
+    head = system.model.head
+    captured = []
+    hook = None
+    if not validity_mask:
+        from dfd.heads import FactorizedHead
+        if not isinstance(head, FactorizedHead):
+            raise ValueError("validity_mask: false needs a checkpoint with the factorized head")
+        sizes = head.sizes
+        lookup = torch.full(sizes, -1, dtype=torch.long)
+        lookup[head.base_ids.cpu(), head.modifier_ids.cpu(), head.tone_ids.cpu()] = torch.arange(len(head.base_ids))
+        hook = head.register_forward_hook(lambda module, inputs, output: captured.append(inputs[0]))
     transform = SceneTextDataModule.get_transform(tuple(system.hparams.img_size))
     predictions = []
-    with torch.inference_mode():
-        for start in range(0, len(samples), batch_size):
-            batch = samples[start:start + batch_size]
-            images = torch.stack([transform(Image.open(io.BytesIO(sample.image)).convert("RGB")) for sample in batch])
-            probabilities = system(images.to(device)).softmax(-1)
-            decoded, _ = system.tokenizer.decode(probabilities)
-            predictions.extend(decoded)
+    positions = invalid = 0
+    try:
+        with torch.inference_mode():
+            for start in range(0, len(samples), batch_size):
+                batch = samples[start:start + batch_size]
+                images = torch.stack([transform(Image.open(io.BytesIO(sample.image)).convert("RGB")) for sample in batch])
+                captured.clear()
+                logits = system(images.to(device))
+                decoded, _ = system.tokenizer.decode(logits.softmax(-1))
+                if validity_mask:
+                    predictions.extend(decoded)
+                    continue
+                # Last head call = refinement pass over the whole sequence; without refinement,
+                # the AR loop calls the head once per position.
+                hidden = captured[-1] if captured[-1].shape[1] == logits.shape[1] else torch.cat(captured, dim=1)
+                parts = head.component_logits(hidden)
+                classes = lookup[parts.base.argmax(-1).cpu(), parts.modifier.argmax(-1).cpu(), parts.tone.argmax(-1).cpu()]
+                for row, text in enumerate(decoded):
+                    length = min(len(text) + 1, classes.shape[1])  # characters plus the EOS position
+                    bad = (classes[row, :length] < 0).tolist()
+                    positions += length
+                    invalid += sum(bad)
+                    chars = [metrics.INVALID_CHARACTER if bad[i] else char for i, char in enumerate(text)]
+                    if length > len(text) and bad[len(text)]:
+                        chars.append(metrics.INVALID_CHARACTER)
+                    predictions.append("".join(chars))
+    finally:
+        if hook is not None:
+            hook.remove()
+    if stats is not None and not validity_mask:
+        stats.update(positions=positions, invalid_triples=invalid)
     return predictions
 
 

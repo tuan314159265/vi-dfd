@@ -28,8 +28,7 @@
 8. Implement/export ONNX, benchmark on one machine (E6), analyze validation errors (E7).
 9. Implement `/recognize`, final CPU dependencies and the demo Docker image.
 
-Teacher training and `eval.py` are implemented. Student training still fails with an
-actionable message. `/health` is available in the API skeleton; `/recognize`
+Teacher, student training (`dfd/student.py`) and `eval.py` are implemented. `/health` is available in the API skeleton; `/recognize`
 returns HTTP 501 rather than placeholder OCR predictions.
 
 ## Decisions made
@@ -54,13 +53,11 @@ returns HTTP 501 rather than placeholder OCR predictions.
 - The validity mask does not enter training for marginal DFD (component CE + marginal KL), so the
   `no_validity_mask` ablation differs from full DFD only at decoding and scoring.
 
-## Decisions to finalize
+## Decisions finalized on 2026-11-16
 
-- Component ER denominators, insertion/deletion handling, alignment tie-breaking.
-- E4 teacher count: one teacher seed vs table wording of three seeds.
-- Compare quantization within the same checkpoint; separate it from downsizing.
-- Meaning of “one standard deviation” in E2's decision rule.
-- Valid decoding/scoring for the unmasked Cartesian-product ablation.
+See `docs/EXPERIMENTS.md`, section 7: reference data build, teacher check, the E2 paired-difference
+rule, component ER denominators and alignment, unmasked decoding for E3, E5 image-level subsampling
+(`dfd/teacher_data.py`) and a single teacher seed for E4.
 
 `configs/tuning.yaml` is a study policy, not a model-run config accepted by train.py.
 The run templates contain candidate KD values only. The shared batch/epoch budget

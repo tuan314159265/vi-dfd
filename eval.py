@@ -96,6 +96,7 @@ def main(argv=None) -> int:
         if args.checkpoint and precision != "fp32":
             raise ValueError(f"precision {precision!r}: score exported/quantized models with --predictions-dir")
         case_sensitive = bool(settings.get("case_sensitive", False))
+        validity_mask = (config.get("composition") or {}).get("validity_mask", True) is not False
         splits = args.splits or settings.get("splits") or []
         subsets = args.subsets or list(dict.fromkeys(["all", *(settings.get("subsets") or [])]))
         data_root, subset_dir = args.data_root, args.subset_dir
@@ -115,6 +116,7 @@ def main(argv=None) -> int:
             raise ValueError("No splits to evaluate")
 
         table = DecompositionTable.from_characters()
+        invalid = evaluation.metrics.INVALID_CHARACTER
         system = params = None
         if args.checkpoint:
             system = evaluation.load_parseq_checkpoint(str(args.checkpoint), table, args.device)
@@ -127,7 +129,7 @@ def main(argv=None) -> int:
             "source": str(args.checkpoint or args.predictions_dir),
             "checkpoint_sha256": file_sha256(args.checkpoint) if args.checkpoint else None,
             "vocabulary_fingerprint": table.fingerprint(),
-            "case_sensitive": case_sensitive, "precision": precision, "splits": {},
+            "case_sensitive": case_sensitive, "precision": precision, "validity_mask": validity_mask, "splits": {},
         }
         for split in splits:
             lmdb_path = data_root / evaluation.split_dir(split)
@@ -135,7 +137,9 @@ def main(argv=None) -> int:
             ids = [sample.source_id for sample in samples]
             members = evaluation.read_subsets(subset_dir, split, subsets, ids)
             if system is not None:
-                raw = evaluation.predict_parseq(system, samples, args.batch_size, args.device)
+                decode_stats = {}
+                raw = evaluation.predict_parseq(system, samples, args.batch_size, args.device,
+                                                validity_mask=validity_mask, stats=decode_stats)
             else:
                 given = evaluation.read_predictions(args.predictions_dir / f"{split}.csv")
                 missing = set(ids) - set(given)
@@ -170,15 +174,17 @@ def main(argv=None) -> int:
                 writer = csv.writer(handle, lineterminator="\n")
                 writer.writerow(["source_id", "label", "prediction", "raw_prediction", "correct"])
                 for (source_id, label, prediction), raw_prediction in zip(records, raw):
-                    writer.writerow([source_id, label, prediction, raw_prediction, int(label == prediction and "|" not in label)])
+                    writer.writerow([source_id, label, prediction, raw_prediction, int(label == prediction and invalid not in label)])
             (run_dir / "tone_confusion").mkdir(exist_ok=True)
             for name, matrix in confusion.items():
                 (run_dir / "tone_confusion" / f"{split}_{name}.json").write_text(json.dumps(matrix, indent=2) + "\n", encoding="utf-8")
             info["splits"][split] = {
                 "lmdb": str(lmdb_path), "lmdb_sha256": evaluation.lmdb_fingerprint(lmdb_path),
                 "num_samples": len(samples),
-                "labels_with_unknown_characters": sum("|" in record[1] for record in records),
+                "labels_with_unknown_characters": sum(invalid in record[1] for record in records),
             }
+            if system is not None and not validity_mask:
+                info["splits"][split]["unmasked_decoding"] = decode_stats
             for row in new_rows:
                 print(f"{split:<12} {row['subset']:<18} n={row['num_words']:<6} word_acc={row['word_acc']:.4f} "
                       f"1-NED={row['ned_score']:.4f} tone_er={row['tone_er']:.4f}")

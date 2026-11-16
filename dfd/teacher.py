@@ -131,21 +131,41 @@ def datasets(config):
     return train, validation
 
 
+def _sha256(path):
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for block in iter(lambda: handle.read(1 << 20), b""):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def data_identity(config):
+    """Frozen-data identity shared by teacher and students.
+
+    Works with Tiến's export (no `vocabulary.json`, no `preparation.json`) and with a
+    local rebuild by `scripts/prepare_teacher_data.py` (both files present and recorded).
+    """
     root = Path(config["data"]["root"])
     table = DecompositionTable.from_characters()
-    vocab = json.loads((root / config["data"]["vocab_path"]).read_text(encoding="utf-8"))
-    if vocab["fingerprint"] != table.fingerprint() or tuple(vocab["characters"]) != table.characters:
-        raise ValueError("Frozen vocabulary differs from the model class order")
+    vocab_path = root / config["data"]["vocab_path"] if config["data"].get("vocab_path") else None
+    if vocab_path and vocab_path.exists():
+        vocab = json.loads(vocab_path.read_text(encoding="utf-8"))
+        if vocab["fingerprint"] != table.fingerprint() or tuple(vocab["characters"]) != table.characters:
+            raise ValueError("Frozen vocabulary differs from the model class order")
     freeze_path = root / config["data"]["split_manifest"]
     freeze = json.loads(freeze_path.read_text(encoding="utf-8"))
     for path, expected in freeze["manifest_sha256"].items():
-        actual = hashlib.sha256((root / "splits" / path).read_bytes()).hexdigest()
-        if actual != expected:
+        if _sha256(root / "splits" / path) != expected:
             raise ValueError(f"Frozen split/subset changed: {path}")
-    preparation = json.loads((root / "preparation.json").read_text(encoding="utf-8"))
-    return {"freeze_sha256": hashlib.sha256(freeze_path.read_bytes()).hexdigest(),
-            "vocabulary_fingerprint": table.fingerprint(), "preparation": preparation}
+    identity = {
+        "freeze_sha256": _sha256(freeze_path),
+        "vocabulary_fingerprint": table.fingerprint(),
+        "word_crop_counts": freeze["word_crop_counts"],
+        "lmdb_sha256": {split: _sha256(root / "lmdb" / split / "data.mdb") for split in ("train", "val")},
+    }
+    if (root / "preparation.json").exists():
+        identity["preparation"] = json.loads((root / "preparation.json").read_text(encoding="utf-8"))
+    return identity
 
 
 def probe_batches(config, output):
@@ -208,7 +228,7 @@ def run_teacher(config, repo, resume=None, smoke=False):
     seed_everything(config["seed"])
     identity = data_identity(config)
     train, validation = datasets(config)
-    expected = identity["preparation"]["word_crop_counts"]
+    expected = identity["word_crop_counts"]
     if train.audit["total"] != expected["train"] or len(validation) != expected["val"]:
         raise ValueError("LMDB counts differ from the frozen data preparation")
     model, initialization = build_teacher(config)
