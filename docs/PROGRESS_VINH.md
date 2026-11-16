@@ -1,6 +1,6 @@
 # Tiến độ các task của Vinh
 
-Cập nhật: 16/11/2026. Task 7 và 11 nằm ở nhánh `feat/vocab-factorized-head`, đã merge vào `main` (fast-forward). Task 14, phần chuẩn bị Task 15 và `eval.py` (Task 26) nằm ở nhánh `feat/dfd-distillation`, tách từ `feat/vocab-factorized-head`. Nhánh này có cherry-pick commit metric của Tiến (`03109a4` → `88645f2`, giữ tác giả Tiến) để `eval.py` dùng được. Các sửa cho notebook của Tiến nằm ở nhánh `feat/vintext-data-preparation`.
+Cập nhật: 16/11/2026. Task 7, 11 (nhánh `feat/vocab-factorized-head`) và Task 14, phần chuẩn bị Task 15, `eval.py` (Task 26) (nhánh `feat/dfd-distillation`) đã merge fast-forward vào `main`. `main` có cherry-pick commit metric của Tiến (`03109a4` → `e2f7b19`, giữ tác giả Tiến) để `eval.py` dùng được, nên khi mở PR Tiến cần rebase nhánh `feat/metrics-evaluation` lên `main`. Các sửa cho notebook của Tiến nằm ở nhánh `feat/vintext-data-preparation`, chưa merge vào `main` vì lịch sử nhánh đó còn ảnh VinText.
 
 ## Trạng thái
 
