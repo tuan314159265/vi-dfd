@@ -1,6 +1,6 @@
 # Tiến độ các task của Vinh
 
-Cập nhật: 16/11/2026. Task 7, 11 (nhánh `feat/vocab-factorized-head`) và Task 14, phần chuẩn bị Task 15, `eval.py` (Task 26) (nhánh `feat/dfd-distillation`) đã merge fast-forward vào `main`. `main` có cherry-pick commit metric của Tiến (`03109a4` → `e2f7b19`, giữ tác giả Tiến) để `eval.py` dùng được, nên khi mở PR Tiến cần rebase nhánh `feat/metrics-evaluation` lên `main`. Các sửa cho notebook của Tiến nằm ở nhánh `feat/vintext-data-preparation`, chưa merge vào `main` vì lịch sử nhánh đó còn ảnh VinText.
+Cập nhật: 16/11/2026 (chiều). `main` có Task 7, 11, 14, 26 và phần chuẩn bị Task 15. Nhánh `integrate/clean-history` nối tiếp `main` với notebook dữ liệu của Tiến (bản đã xóa ảnh, `921bb6c`), 3 commit Task 9 của Tuấn (cherry-pick, giữ tác giả) và phần train student của Vinh. Nhánh này **không** chứa commit `9b3ab7e` (ảnh VinText trong output notebook). Xem mục "Các nhánh và ảnh VinText".
 
 ## Trạng thái
 
@@ -9,8 +9,8 @@ Cập nhật: 16/11/2026. Task 7, 11 (nhánh `feat/vocab-factorized-head`) và T
 | 1 | Proposal chi tiết | Done (từ trước) | |
 | 7 | Bảng phân rã ký tự | **Done** | Đã đối chiếu với charset VinText, bảng giữ nguyên 229 lớp |
 | 11 | Head phân rã cho student | **Done** | Đã kiểm chứng trên PARSeq thật |
-| 14 | Cài DFD và KD thường | **Done về code** | Đã chạy `Trainer.fit` trên PARSeq thật với teacher giả. Còn ghép vào script train của Tuấn khi Task 9 được push |
-| 15 | E2 sơ bộ, chọn siêu tham số | **Đang chờ** | Đã có script sinh grid (12 + 12 trial) và chọn cấu hình, đã có `eval.py`, đã có dữ liệu thật (16/11). Còn chờ teacher, recipe, mốc 13. Xem "Cần nhắc" |
+| 14 | Cài DFD và KD thường | **Done** | Đã ghép vào `train.py` (`dfd/student.py`). Smoke test `ti_ce`, `ti_kd`, `ti_dfd` chạy thông trên dữ liệu thật với teacher thật của Tuấn. Xem mục "Train student" |
+| 15 | E2 sơ bộ, chọn siêu tham số | **Đang chờ** | Đã có script sinh grid (12 + 12 trial) và chọn cấu hình, đã có `eval.py`, đã có dữ liệu thật (16/11). Đã có teacher và recipe (16/11). Còn chờ Tuấn xác nhận split, mốc 13 và GPU. Xem "Cần nhắc" |
 | 16 | E2 đủ 3 seed + E3 | Chờ Task 15 | |
 | 25 | Đóng gói và hoàn tất nội bộ | Chờ thí nghiệm và báo cáo | |
 | 26 | Pipeline đánh giá `eval.py` (task mới) | **Done** | Đã kiểm chứng trên LMDB giả, checkpoint PARSeq thật và LMDB VinText thật (16/11). Xem mục "Dữ liệu thật" |
@@ -21,11 +21,12 @@ Các task "Cả nhóm" (13, 20, 23, 24) phụ thuộc kết quả chưa có. Cho
 
 | Ai | Việc | Chặn task | Ghi chú |
 |---|---|---|---|
-| **Tuấn** | Push code train teacher (Task 9) và chia sẻ checkpoint `.ckpt` qua kênh private | 14 (ghép), 15 | Repo chưa có code hay checkpoint của Task 9 dù bảng ghi Done. Checkpoint phải là checkpoint Lightning của `strhub` PARSeq, `charset_train` đúng 228 ký tự theo thứ tự bảng. Kiểm tra bằng lệnh ở mục "Ghép vào script train" |
-| **Tuấn** | Báo batch size, số epoch, lr đã chốt ở Task 9 | 15 | Để điền `training.*` (đang `null`) trong YAML của E2/E3. Báo kèm word acc validation của teacher |
+| **Tuấn** | Gửi `splits/freeze_manifest.json` và `splits/manifests/image_split_assignments.csv` của bản dữ liệu Tuấn tự tạo (chỉ có checksum và image id → split, không có nhãn) | 15 | Teacher được train trên bản dữ liệu Tuấn tạo lại ngày 09/11, không phải bản Tiến gửi: SHA của `freeze_manifest.json` và của cả 4 file LMDB đều khác. Phải xác nhận gán ảnh vào train/val trùng với bản của Tiến thì mới dùng teacher cho E2 được. Xem mục "Teacher của Tuấn" |
+| **Cả nhóm** | Chốt dùng **một** bản dữ liệu (đề xuất: bản của Tiến) cho mọi run student và mọi lần chấm điểm | 15, 16 | Kể cả khi split trùng, ảnh crop vẫn khác byte, nên mọi student và mọi bảng kết quả phải dùng chung một bản |
+| **Cả nhóm** | Đồng ý thay `main` bằng nhánh `integrate/clean-history` và xóa ba nhánh remote còn chứa ảnh | Merge | Xem mục "Các nhánh và ảnh VinText" |
 | **Tuấn** | Kết quả E1 (Task 12), nhất là Ti vanilla | 15, mốc 13 | Ti vanilla là mốc so sánh của E2 |
 | **Tiến** | Hoàn tất Task 10 và mở PR | 15 | Nhánh `origin/feat/metrics-evaluation` (commit `03109a4`, 15/11) đã có `dfd/metrics.py`, bảng vẫn ghi In progress. Xem mục "Góp ý cho module metric" bên dưới |
-| **Cả nhóm (mốc 13)** | Chạy `scripts/time_kd_step.py` trên GPU thật | 13, 15 | Ra ms/step cho 4 biến thể và thời gian 1 epoch dự kiến, để chốt ngân sách GPU và số seed |
+| **Cả nhóm (mốc 13)** | Chạy `scripts/time_kd_step.py --batch-size 64 --train-samples 23267` trên GPU thật | 13, 15 | Ra ms/step cho 4 biến thể và thời gian 1 epoch dự kiến, để chốt ngân sách GPU và số seed |
 | **Tuấn, Tiến** | Dùng `eval.py` cho E1, E4, E5 thay vì tự chấm điểm | 12, 17, 18 | VietOCR, CRNN và bản INT8/ONNX ghi file `source_id,prediction` rồi chấm bằng `--predictions-dir`, để mọi model chung mẫu số |
 | **Người chạy E3 (Tuấn)** | Chốt cách decode khi bỏ validity mask | 16 | `joint_lambda` đã chốt là 1.0 |
 
@@ -132,7 +133,7 @@ trainer.fit(student, datamodule)
 - `scripts/time_kd_step.py` đo ms/step và bộ nhớ đỉnh cho `ti_ce`, `ti_factorized`, `ti_kd`, `ti_dfd` với kích thước Ti/S chính thức. Lệnh cho mốc 13, thay số crop train thật vào:
 
   ```bash
-  python scripts/time_kd_step.py --device cuda --batch-size <batch của Task 9> --train-samples 23269
+  python scripts/time_kd_step.py --device cuda --batch-size <batch của Task 9> --train-samples 23267
   ```
 
 - Khi đủ điều kiện: điền `training.*`, `data.*`, `model.teacher_checkpoint` vào hai YAML gốc E2 (`ti_dfd_s42`, `ti_kd_s42`), chạy `make`, train từng trial, chạy `select`, rồi ghi cấu hình đã chọn vào 12 YAML E2 ba seed. Nếu xin compute, gửi bảng kết quả `select` cho giảng viên.
@@ -163,6 +164,63 @@ python eval.py --run-dir results/runs/<run_id> --predictions-dir <dir> --data-ro
 - Checkpoint chỉ chấm ở FP32. INT8 chấm qua `--predictions-dir`, với `precision` lấy từ YAML (E4).
 
 Kiểm chứng (6 test): LMDB và subset giả gồm nhãn có `°`, nhãn 30 ký tự, khác hoa/thường, sai thanh, khác vị trí dấu; chạy đủ hai chế độ. Checkpoint PARSeq có head phân rã được lưu rồi nạp lại, cho cùng dự đoán với model gốc.
+
+## Teacher của Tuấn (nhận 16/11)
+
+Nhánh `origin/feat/teacher-parseq-s` (`30b9ba4`) và gói `Vi-DFD_Task9_Teacher_E1_20261109.zip`. Gói được giải nén ra `Downloads/processed/teacher_s42_e1/`. SHA-256 khớp 18/18 file.
+
+- Recipe đã chốt: batch 64, 20 epoch, AdamW + OneCycleLR, base LR 7e-4 (peak thực 1,75e-4), warmup 0,075, weight decay 0, clip 20, AMP. Đã nằm sẵn trong `training.*` của mọi YAML.
+- `load_frozen_teacher` nạp được checkpoint, charset đúng 228 ký tự theo thứ tự bảng, 23.935.717 tham số.
+
+Chấm lại bằng `eval.py` (CPU, FP32) trên bản dữ liệu của Tiến:
+
+| Split | n | Word acc | 1-NED | Base ER | Modifier ER | Tone ER |
+|---|---|---|---|---|---|---|
+| validation | 2.507 | 0,8871 | 0,9461 | | | 0,0232 |
+| test | 7.201 | 0,8460 | 0,9195 | 0,0659 | 0,0395 | 0,0481 |
+| unseen_test | 10.068 | 0,8779 | 0,9479 | 0,0282 | 0,0170 | 0,0240 |
+
+- Validation 88,71% so với 88,67% Tuấn báo (2.224 so với 2.223 từ đúng), diacritic-heavy 91,80% so với 91,26% (168 so với 167 từ). Lệch đúng 1 từ, hợp với khác biệt CPU FP32 và GPU AMP.
+- Đây là bằng chứng gián tiếp rằng split val trùng nhau. Nếu ảnh val của Tiến nằm trong train của Tuấn, độ chính xác trên val sẽ cao bất thường. Vẫn cần Tuấn gửi file để xác nhận trực tiếp (xem "Cần nhắc").
+- Số ở bảng là để đối chiếu, chạy ngoài thư mục `results/runs`. Số chính thức của E1 phải chạy `eval.py --config configs/runs/E1/teacher_s42.yaml` từ commit sạch.
+
+## Train student (Task 14 ghép xong)
+
+File: `dfd/student.py`, `tests/test_student.py`, `train.py`. Sửa nhỏ trên code của Tuấn: vòng `Trainer.fit` của `run_teacher` tách thành `fit_parseq` dùng chung. `initialize_teacher` nhận thêm `url`, nên khởi tạo được cả trọng số tiếng Anh `parseq_tiny`. `--smoke-test` chạy được trên CPU (FP32).
+
+```bash
+python train.py --config configs/runs/E2/ti_dfd_s42.yaml \
+    --data-root <processed>/vintext_notebook \
+    --teacher-checkpoint <processed>/teacher_s42_e1/checkpoints/best-epoch=17-validation_word_acc=0.8867.ckpt
+# thêm --smoke-test để chạy thử 1 batch; ti_ce, ti_factorized không cần --teacher-checkpoint
+```
+
+- Student dùng y hệt pipeline của teacher: cùng cách đọc LMDB (train bỏ 2 crop `°`, val giữ đủ 2.507), cùng augment, budget 64 × 20 epoch, metric validation, cách chọn checkpoint tốt nhất. Chỉ khác head (thường hoặc phân rã) và loss (CE, KD, DFD, các biến thể E3), lấy từ YAML.
+- `StudentPARSeq` kế thừa `VietnamesePARSeq` của Tuấn rồi đến `DistilledPARSeq`, nên validation và checkpoint theo kiểu teacher, còn bước train là bước có KD.
+- Khởi tạo từ `parseq_tiny-e7a21b54.pt` theo đúng cách teacher: chép 97 context embedding theo token, reset head. Student có head phân rã thì thay head sau bước này.
+- `--data-root` tự điền `vocab_path`, `split_manifest`, `subset_manifest` theo cấu trúc chuẩn nếu YAML để `null`. Không cần `preparation.json`, nên dùng được bản dữ liệu của Tiến.
+- `data_identity.json` của run ghi SHA của freeze manifest và LMDB, kèm data identity của teacher. Nếu teacher train trên freeze manifest khác, script in `WARNING` (hiện đang in, vì lý do ở mục trên).
+- Từ chối chạy, kèm lý do: `training_fraction < 1` (E5 chưa chốt cách lấy mẫu) và `no_validity_mask` (train giống hệt DFD, nên dùng lại checkpoint `ti_dfd` cùng seed).
+
+| Kiểm tra | Kết quả |
+|---|---|
+| `pytest` toàn repo | 145 passed (thêm 10 test student, 3 test của Tuấn) |
+| Smoke `ti_dfd`, `ti_kd`, `ti_ce` trên dữ liệu thật, teacher thật, CPU | Cả ba `smoke_completed`. Student 6,0 triệu tham số, khoảng 70 giây mỗi run |
+| Checkpoint student có head phân rã qua `eval.py` | Nạp lại cho cùng logit |
+
+## Các nhánh và ảnh VinText
+
+Ảnh crop VinText (output của `02_crop_vintext` cell 7 và `03_EDA` cell 19, 20) chỉ còn trong **lịch sử** commit `9b3ab7e`. Bản mới nhất của mọi nhánh chỉ còn biểu đồ thống kê. Nhưng ba nhánh remote đều có `9b3ab7e` trong lịch sử: `feat/vintext-data-preparation`, `feat/metrics-evaluation`, `feat/teacher-parseq-s`. Merge bất kỳ nhánh nào trong số này vào `main` sẽ đưa ảnh vào `main` vĩnh viễn.
+
+Cách xử lý: nhánh `integrate/clean-history` dựng lại từ `main`, gồm:
+
+1. `921bb6c`: notebook của Tiến ở trạng thái cuối, kèm các sửa của Vinh, không có ảnh. Tác giả là Tiến.
+2. Cherry-pick `36ce735`, `9d56af0`, `30b9ba4` của Tuấn, giữ tác giả. Bỏ commit merge `b51a8c2` vì nó kéo `9b3ab7e` vào. Khi xung đột, notebook giữ bản sạch, README và IMPLEMENTATION gộp nội dung của cả hai bên.
+3. Commit của Vinh: requirements, train student, tài liệu.
+
+So với bản cuối của Tuấn, code teacher không đổi gì ngoài hai chỗ ở mục "Train student".
+
+Khi nhóm đồng ý: fast-forward `main` lên nhánh này, rồi **xóa** ba nhánh remote trên. Tiến và Tuấn tạo nhánh mới từ `main`, không push lại nhánh cũ. Sau khi xóa nhánh, GitHub vẫn có thể giữ commit cũ một thời gian nếu ai đó biết hash, và người đã clone vẫn còn bản sao. Muốn gỡ hẳn thì phải liên hệ GitHub Support.
 
 ## Dữ liệu thật (nhận 16/11)
 
