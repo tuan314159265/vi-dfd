@@ -47,6 +47,5 @@ multirun/
 *.safetensors
 .vscode/
 .idea/
-.claude/
 Thumbs.db
 

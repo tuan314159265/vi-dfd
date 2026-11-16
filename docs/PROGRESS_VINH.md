@@ -1,6 +1,6 @@
 # Tiến độ các task của Vinh
 
-Cập nhật: 15/11/2026. Task 7 và 11 nằm ở nhánh `feat/vocab-factorized-head`, tách từ `main`. Task 14, phần chuẩn bị Task 15 và `eval.py` (Task 26) nằm ở nhánh `feat/dfd-distillation`, tách từ `feat/vocab-factorized-head`. Nhánh này có cherry-pick commit metric của Tiến (`03109a4` → `88645f2`, giữ tác giả Tiến) để `eval.py` dùng được. Các sửa cho notebook của Tiến nằm ở nhánh `feat/vintext-data-preparation`.
+Cập nhật: 16/11/2026. Task 7 và 11 nằm ở nhánh `feat/vocab-factorized-head`, đã merge vào `main` (fast-forward). Task 14, phần chuẩn bị Task 15 và `eval.py` (Task 26) nằm ở nhánh `feat/dfd-distillation`, tách từ `feat/vocab-factorized-head`. Nhánh này có cherry-pick commit metric của Tiến (`03109a4` → `88645f2`, giữ tác giả Tiến) để `eval.py` dùng được. Các sửa cho notebook của Tiến nằm ở nhánh `feat/vintext-data-preparation`.
 
 ## Trạng thái
 
@@ -10,10 +10,10 @@ Cập nhật: 15/11/2026. Task 7 và 11 nằm ở nhánh `feat/vocab-factorized-
 | 7 | Bảng phân rã ký tự | **Done** | Đã đối chiếu với charset VinText, bảng giữ nguyên 229 lớp |
 | 11 | Head phân rã cho student | **Done** | Đã kiểm chứng trên PARSeq thật |
 | 14 | Cài DFD và KD thường | **Done về code** | Đã chạy `Trainer.fit` trên PARSeq thật với teacher giả. Còn ghép vào script train của Tuấn khi Task 9 được push |
-| 15 | E2 sơ bộ, chọn siêu tham số | **Đang chờ** | Đã có script sinh grid (12 + 12 trial) và chọn cấu hình, đã có `eval.py`. Chờ teacher, recipe, dữ liệu, mốc 13. Xem "Cần nhắc" |
+| 15 | E2 sơ bộ, chọn siêu tham số | **Đang chờ** | Đã có script sinh grid (12 + 12 trial) và chọn cấu hình, đã có `eval.py`, đã có dữ liệu thật (16/11). Còn chờ teacher, recipe, mốc 13. Xem "Cần nhắc" |
 | 16 | E2 đủ 3 seed + E3 | Chờ Task 15 | |
 | 25 | Đóng gói và hoàn tất nội bộ | Chờ thí nghiệm và báo cáo | |
-| 26 | Pipeline đánh giá `eval.py` (task mới) | **Done về code** | Đã kiểm chứng trên LMDB giả và checkpoint PARSeq thật. Chưa chạy trên dữ liệu thật |
+| 26 | Pipeline đánh giá `eval.py` (task mới) | **Done** | Đã kiểm chứng trên LMDB giả, checkpoint PARSeq thật và LMDB VinText thật (16/11). Xem mục "Dữ liệu thật" |
 
 Các task "Cả nhóm" (13, 20, 23, 24) phụ thuộc kết quả chưa có. Cho mốc 13 em đã chuẩn bị script đo thời gian step có KD.
 
@@ -25,7 +25,6 @@ Các task "Cả nhóm" (13, 20, 23, 24) phụ thuộc kết quả chưa có. Cho
 | **Tuấn** | Báo batch size, số epoch, lr đã chốt ở Task 9 | 15 | Để điền `training.*` (đang `null`) trong YAML của E2/E3. Báo kèm word acc validation của teacher |
 | **Tuấn** | Kết quả E1 (Task 12), nhất là Ti vanilla | 15, mốc 13 | Ti vanilla là mốc so sánh của E2 |
 | **Tiến** | Hoàn tất Task 10 và mở PR | 15 | Nhánh `origin/feat/metrics-evaluation` (commit `03109a4`, 15/11) đã có `dfd/metrics.py`, bảng vẫn ghi In progress. Xem mục "Góp ý cho module metric" bên dưới |
-| **Tiến** | Gửi LMDB và `splits/` cho Vinh qua kênh private | 15 | Tài khoản GPU của Vinh cần dữ liệu để chạy |
 | **Cả nhóm (mốc 13)** | Chạy `scripts/time_kd_step.py` trên GPU thật | 13, 15 | Ra ms/step cho 4 biến thể và thời gian 1 epoch dự kiến, để chốt ngân sách GPU và số seed |
 | **Tuấn, Tiến** | Dùng `eval.py` cho E1, E4, E5 thay vì tự chấm điểm | 12, 17, 18 | VietOCR, CRNN và bản INT8/ONNX ghi file `source_id,prediction` rồi chấm bằng `--predictions-dir`, để mọi model chung mẫu số |
 | **Người chạy E3 (Tuấn)** | Chốt cách decode khi bỏ validity mask | 16 | `joint_lambda` đã chốt là 1.0 |
@@ -133,7 +132,7 @@ trainer.fit(student, datamodule)
 - `scripts/time_kd_step.py` đo ms/step và bộ nhớ đỉnh cho `ti_ce`, `ti_factorized`, `ti_kd`, `ti_dfd` với kích thước Ti/S chính thức. Lệnh cho mốc 13, thay số crop train thật vào:
 
   ```bash
-  python scripts/time_kd_step.py --device cuda --batch-size <batch của Task 9> --train-samples <số crop train>
+  python scripts/time_kd_step.py --device cuda --batch-size <batch của Task 9> --train-samples 23269
   ```
 
 - Khi đủ điều kiện: điền `training.*`, `data.*`, `model.teacher_checkpoint` vào hai YAML gốc E2 (`ti_dfd_s42`, `ti_kd_s42`), chạy `make`, train từng trial, chạy `select`, rồi ghi cấu hình đã chọn vào 12 YAML E2 ba seed. Nếu xin compute, gửi bảng kết quả `select` cho giảng viên.
@@ -164,6 +163,42 @@ python eval.py --run-dir results/runs/<run_id> --predictions-dir <dir> --data-ro
 - Checkpoint chỉ chấm ở FP32. INT8 chấm qua `--predictions-dir`, với `precision` lấy từ YAML (E4).
 
 Kiểm chứng (6 test): LMDB và subset giả gồm nhãn có `°`, nhãn 30 ký tự, khác hoa/thường, sai thanh, khác vị trí dấu; chạy đủ hai chế độ. Checkpoint PARSeq có head phân rã được lưu rồi nạp lại, cho cùng dự đoán với model gốc.
+
+## Dữ liệu thật (nhận 16/11)
+
+Tiến gửi `lmdb/` và `splits/` qua kênh private. Đặt ngoài repo đúng cấu trúc trong README của nhánh dữ liệu:
+
+```text
+Downloads/
+├── processed/vintext_notebook/
+│   ├── lmdb/{train,val,test,unseen_test}/
+│   └── splits/{manifests,subsets,duplicates}/, freeze_manifest.json
+└── vi-dfd/
+```
+
+Lệnh chấm điểm trên máy này: `--data-root ../processed/vintext_notebook/lmdb --subset-dir ../processed/vintext_notebook/splits/subsets`.
+
+| Kiểm tra | Kết quả |
+|---|---|
+| SHA-256 của 21 file trong `freeze_manifest.json` | Khớp cả 21 |
+| Số crop đọc từ LMDB | train 23.269, val 2.507, test 7.201, unseen test 10.068. Khớp manifest |
+| Subset nối bằng `source-id` | Khớp hết. val: diacritic 183, small 489, rare 6. test: 587, 1.545, 24. unseen: 776, 1.916, 33 |
+| Ký tự ngoài bảng 229 lớp | Chỉ dấu cách (308 nhãn: train 223, val 29, test 8, unseen 48) và `°` (2 crop train: `36:3`, `36:7`). Đúng quy tắc đã chốt |
+| Nhãn dài hơn 25 ký tự | val 1, test 2, train và unseen 0 |
+| `eval.py --predictions-dir`, dự đoán = nhãn | Word acc, 1-NED = 1,0000 và mọi ER = 0 ở cả 3 split × 4 subset |
+| `eval.py --predictions-dir`, dự đoán = nhãn bỏ dấu thanh | Base ER = modifier ER = 0, chỉ tone ER tăng (0,126 / 0,128 / 0,132). Word acc còn 0,537 / 0,522 / 0,512, tức khoảng một nửa số từ có dấu thanh |
+| `eval.py --checkpoint`, student nhỏ khởi tạo ngẫu nhiên, head phân rã, CPU | Chạy hết 2.507 mẫu val, ghi đủ `metrics.csv`, `predictions/`, `tone_confusion/`, `eval_info.json` |
+
+Fingerprint LMDB (`evaluation.lmdb_fingerprint`, ghi vào `eval_info.json` của mỗi run):
+
+| Split | SHA-256 |
+|---|---|
+| train | `af658c68e81f2eafddbe82898ac117f829df787198c961422ac70c35b77a7246` |
+| val | `e8648b1bdcd5fd36a7cd5c0a7439b05463917176960e72e0c148e76cc1e5a802` |
+| test | `56f30f3496f33ec1116274f1cf72c43faae1d645a087c135c1b44b112b4fe41f` |
+| unseen_test | `c128a6ff4e3a9e25591f4c96a60392aea31570aa050cb1fa81c8221549f11419` |
+
+**Lưu ý cho Task 9 (Tuấn):** `LmdbDataset` của PARSeq (charset 228 ký tự, `remove_whitespace=True`, `normalize_unicode=False`) giữ **cả 23.269** crop train. Nó **không bỏ** 2 crop chứa `°` mà biến nhãn thành chuỗi đã xóa `°`, trái với quy tắc đã chốt. Script train phải lọc riêng 2 crop `36:3` và `36:7`. Ở val/test, nó chỉ giữ 2.506 / 7.199 / 10.068 mẫu vì bỏ nhãn dài hơn 25 ký tự. Vì vậy validation trong lúc train sẽ lệch nhẹ so với `eval.py`, còn số liệu báo cáo phải lấy từ `eval.py`.
 
 ## Góp ý cho module metric (gửi Tiến)
 
@@ -233,7 +268,7 @@ Các notebook **chưa được chạy lại trên dữ liệu thật**, vì dữ
 
 1. **Xóa ảnh khỏi lịch sử GitHub (cần nhóm quyết định).** Commit `9b3ab7e` đã push vẫn chứa ảnh VinText. Sửa trong working tree không gỡ được phần đã public. Cách gỡ là thay commit đó rồi force-push nhánh của Tiến, hoặc xóa nhánh remote và push lại, sau đó báo Tiến lấy lại nhánh.
 2. **Tiến chạy lại cell 6, 9 của `03_EDA`** để cập nhật số bị lẫn box rỗng, rồi xóa output ảnh ở cell 19, 20 trước khi commit.
-3. **Tiến gửi riêng cho nhóm** LMDB và thư mục `splits/` qua kênh private. Task 9 cần chúng. Không commit manifest vào repo public vì có chứa nhãn.
+3. ~~Tiến gửi riêng cho nhóm LMDB và thư mục `splits/`~~. Đã nhận ngày 16/11, xem mục "Dữ liệu thật". Vẫn không commit manifest vào repo vì có chứa nhãn.
 
 ## Kết quả đối chiếu charset
 
