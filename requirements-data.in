@@ -1,10 +1,11 @@
-# Unlocked dependencies for the dataset notebooks; not needed for scaffold checks.
+# Dataset notebook dependencies; resolve and snapshot on the selected runtime.
+-r requirements.txt
 numpy>=1.26,<3
 pandas>=2.2,<3
-opencv-python>=4.10,<5
+opencv-python-headless>=4.10,<5
 Pillow>=10.4,<13
-lmdb
 matplotlib>=3.9,<4
 seaborn>=0.13,<1
 jupyterlab>=4.2,<5
 ipykernel>=6.29,<8
+lmdb>=1.4,<2

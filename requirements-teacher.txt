@@ -12,3 +12,4 @@ lmdb==1.6.2
 pandas==2.2.3
 opencv-python-headless==4.10.0.84
 ipython==8.30.0
+rapidfuzz==3.10.1
