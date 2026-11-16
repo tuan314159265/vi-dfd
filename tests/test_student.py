@@ -91,6 +91,9 @@ def test_english_initialization_accepts_tiny_width(tmp_path):
     (lambda c: c["data"].update(training_fraction=0.25), "training_fraction"),
     (lambda c: c.setdefault("composition", {}).update(validity_mask=False), "no_validity_mask"),
     (lambda c: c["model"].update(backbone="parseq_small"), "PARSeq-Ti"),
+    (lambda c: c.update(stage="evaluate"), "PARSeq-Ti"),
+    # E2 tuning trials (stage "tune") pass the stage check and reach the next guard.
+    (lambda c: (c.update(stage="tune"), c["data"].update(training_fraction=0.5)), "training_fraction"),
 ])
 def test_run_student_refuses_unsupported_runs(edit, message):
     cfg = config("E2/ti_dfd_s42.yaml")

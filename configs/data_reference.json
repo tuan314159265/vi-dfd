@@ -1,0 +1,14 @@
+{
+  "note": "Reference build for every student run and every score: Tien's VinText export of 2026-11-16. Hashes only, no data.",
+  "freeze_manifest_sha256": "77a40829740d5e51cac1568dd2f8c46e02ad289c42465f31a63fda2235971ec8",
+  "lmdb_data_mdb_sha256": {
+    "train": "af658c68e81f2eafddbe82898ac117f829df787198c961422ac70c35b77a7246",
+    "val": "e8648b1bdcd5fd36a7cd5c0a7439b05463917176960e72e0c148e76cc1e5a802",
+    "test": "56f30f3496f33ec1116274f1cf72c43faae1d645a087c135c1b44b112b4fe41f",
+    "unseen_test": "c128a6ff4e3a9e25591f4c96a60392aea31570aa050cb1fa81c8221549f11419"
+  },
+  "teacher_checkpoint": {
+    "file": "teacher_s42_e1/checkpoints/best-epoch=17-validation_word_acc=0.8867.ckpt",
+    "sha256": "e185cec4c1cb68d970a8cdd84e4c482ecd1dd4799c26a642f244117ad37bd609"
+  }
+}

@@ -98,8 +98,15 @@ def main(argv=None) -> int:
         case_sensitive = bool(settings.get("case_sensitive", False))
         splits = args.splits or settings.get("splits") or []
         subsets = args.subsets or list(dict.fromkeys(["all", *(settings.get("subsets") or [])]))
-        data_root = args.data_root or (Path(config["data"]["root"]) if config["data"].get("root") else None)
-        subset_dir = args.subset_dir or (Path(config["data"]["subset_manifest"]) if config["data"].get("subset_manifest") else None)
+        data_root, subset_dir = args.data_root, args.subset_dir
+        root = Path(config["data"]["root"]) if config["data"].get("root") else None
+        if data_root is None and root is not None:
+            # data.root is the processed root used for training (lmdb/, splits/); a bare LMDB root also works.
+            data_root = root / "lmdb" if (root / "lmdb").is_dir() else root
+        if subset_dir is None and config["data"].get("subset_manifest"):
+            subset_dir = Path(config["data"]["subset_manifest"])
+            if not subset_dir.is_absolute() and root is not None:
+                subset_dir = root / subset_dir
         if data_root is None:
             raise ValueError("No LMDB root: pass --data-root or set data.root")
         if subset_dir is None and set(subsets) - {"all"}:

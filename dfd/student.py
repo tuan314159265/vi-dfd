@@ -108,8 +108,8 @@ def student_data_identity(config, teacher_checkpoint=None):
 
 
 def run_student(config, repo, resume=None, smoke=False):
-    if config["model"]["backbone"] != "parseq_tiny" or config.get("stage", "train") != "train":
-        raise ValueError("This entry point trains PARSeq-Ti students only")
+    if config["model"]["backbone"] != "parseq_tiny" or config.get("stage", "train") not in ("train", "tune"):
+        raise ValueError("This entry point trains PARSeq-Ti students only (stage train or tune)")
     if float(config["data"].get("training_fraction", 1.0)) != 1.0:
         raise ValueError("training_fraction < 1 (E5) needs an agreed subsampling rule; not implemented")
     if (config.get("composition") or {}).get("validity_mask") is False:

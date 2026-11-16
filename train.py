@@ -58,7 +58,7 @@ def main() -> int:
                 parser.error("Unresolved training fields: " + ", ".join(unresolved))
             run_teacher(config, Path(__file__).resolve().parent, args.resume, args.smoke_test)
             return 0
-        if config["model"]["backbone"] == "parseq_tiny" and config.get("stage", "train") == "train":
+        if config["model"]["backbone"] == "parseq_tiny" and config.get("stage", "train") in ("train", "tune"):
             if unresolved:
                 parser.error("Unresolved training fields: " + ", ".join(unresolved))
             from dfd.student import run_student
