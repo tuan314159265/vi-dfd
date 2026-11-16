@@ -218,6 +218,17 @@ def run_teacher(config, repo, resume=None, smoke=False):
             raise ValueError("Resume requires the exact original configuration and frozen data identity")
         if saved["parseq_commit"] != PARSEQ_COMMIT:
             raise ValueError("Resume uses a different upstream revision")
+    return fit_parseq(config, repo, model, initialization, identity, train, validation, resume, smoke)
+
+
+def fit_parseq(config, repo, model, initialization, identity, train, validation, resume=None, smoke=False):
+    """Shared Lightning loop for the teacher and the students: same data, budget and checkpointing.
+
+    Real runs need CUDA (AMP). A smoke test may run on CPU in FP32 to check the wiring.
+    """
+    cuda = torch.cuda.is_available()
+    if not cuda and not smoke:
+        raise RuntimeError("CUDA is unavailable; run outside the sandbox or use a GPU notebook")
     folder = prepare_run(config, repo)
     model.run_config = config
     model.initialization = initialization
@@ -230,14 +241,14 @@ def run_teacher(config, repo, resume=None, smoke=False):
         (folder / name).write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     workers = config["training"].get("num_workers", 4)
     generator = torch.Generator().manual_seed(config["seed"])
-    kwargs = {"num_workers": workers, "pin_memory": True, "worker_init_fn": seed_worker, "persistent_workers": workers > 0}
+    kwargs = {"num_workers": workers, "pin_memory": cuda, "worker_init_fn": seed_worker, "persistent_workers": workers > 0}
     train_loader = DataLoader(train, batch_size=config["training"]["batch_size"], shuffle=True, generator=generator, **kwargs)
     val_loader = DataLoader(validation, batch_size=config["training"]["batch_size"], shuffle=False, **kwargs)
     best = ModelCheckpoint(dirpath=folder / "checkpoints", filename="best-{epoch:02d}-{validation_word_acc:.4f}",
                            monitor="validation_word_acc", mode="max", save_top_k=1, save_last=True)
     trainer = pl.Trainer(
-        accelerator="gpu", devices=1, max_epochs=config["training"]["epochs"],
-        precision="16-mixed", accumulate_grad_batches=config["training"].get("accumulate_grad_batches", 1),
+        accelerator="gpu" if cuda else "cpu", devices=1, max_epochs=config["training"]["epochs"],
+        precision="16-mixed" if cuda else "32-true", accumulate_grad_batches=config["training"].get("accumulate_grad_batches", 1),
         gradient_clip_val=20.0, callbacks=[best], logger=CSVLogger(str(folder), name="lightning"),
         deterministic=True, num_sanity_val_steps=2, log_every_n_steps=25,
         fast_dev_run=smoke, enable_progress_bar=False,

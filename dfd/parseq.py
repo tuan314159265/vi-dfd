@@ -9,6 +9,7 @@ from pathlib import Path
 
 PARSEQ_COMMIT = "1902db043c029a7e03a3818c616c06600af574be"
 PRETRAINED_URL = "https://github.com/baudm/parseq/releases/download/v1.0.0/parseq-bb5792a6.pt"
+PRETRAINED_TINY_URL = "https://github.com/baudm/parseq/releases/download/v1.0.0/parseq_tiny-e7a21b54.pt"
 
 
 def activate_upstream(root=None):
@@ -25,10 +26,11 @@ def activate_upstream(root=None):
     return root
 
 
-def initialize_teacher(system, table, checkpoint=None):
+def initialize_teacher(system, table, checkpoint=None, url=PRETRAINED_URL):
     """Load every compatible English weight, retain shared input embeddings, reset head.
 
-    Official `parseq` is the 384-wide small model, called PARSeq-S in our proposal.
+    Official `parseq` is the 384-wide small model, called PARSeq-S in our proposal;
+    students pass `url=PRETRAINED_TINY_URL` for the 192-wide `parseq-tiny`.
     `head.*` is intentionally new. English context embeddings including EOS/BOS/PAD
     are copied by token identity instead of discarding all embedding knowledge.
     """
@@ -37,14 +39,15 @@ def initialize_teacher(system, table, checkpoint=None):
     from dfd.vietchar import ASCII_CHARSET
 
     if checkpoint is None:
-        state = torch.hub.load_state_dict_from_url(PRETRAINED_URL, map_location="cpu", check_hash=True, weights_only=True)
-        checkpoint = Path(torch.hub.get_dir()) / "checkpoints/parseq-bb5792a6.pt"
+        state = torch.hub.load_state_dict_from_url(url, map_location="cpu", check_hash=True, weights_only=True)
+        checkpoint = Path(torch.hub.get_dir()) / "checkpoints" / url.rsplit("/", 1)[-1]
     else:
         checkpoint = Path(checkpoint)
         state = torch.load(checkpoint, map_location="cpu", weights_only=True)
     original = Tokenizer(ASCII_CHARSET)
-    if state["head.weight"].shape != (95, 384) or state["text_embed.embedding.weight"].shape != (97, 384):
-        raise ValueError("Expected official 94-character English PARSeq-small weights")
+    width = system.model.head.in_features
+    if state["head.weight"].shape != (95, width) or state["text_embed.embedding.weight"].shape != (97, width):
+        raise ValueError(f"Expected official 94-character English PARSeq weights of width {width}")
     filtered = {key: value for key, value in state.items() if not key.startswith("head.")}
     embedding = system.model.text_embed.embedding.weight.detach().clone()
     copied = 0
@@ -59,6 +62,6 @@ def initialize_teacher(system, table, checkpoint=None):
     if system.model.head.out_features != len(table) or len(system.tokenizer) != len(table) + 2:
         raise ValueError("Tokenizer/head must agree with the 229-class vocabulary plus BOS/PAD")
     digest = hashlib.sha256(Path(checkpoint).read_bytes()).hexdigest()
-    return {"url": PRETRAINED_URL, "checkpoint_sha256": digest, "copied_context_embeddings": copied,
+    return {"url": url, "checkpoint_sha256": digest, "copied_context_embeddings": copied,
             "loaded_model_keys": len(filtered), "reset_keys": loaded.missing_keys,
             "output_classes": system.model.head.out_features, "tokenizer_tokens": len(system.tokenizer)}
