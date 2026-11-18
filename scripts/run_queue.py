@@ -36,7 +36,10 @@ from pathlib import Path
 
 import yaml
 
-EVAL_ONLY = {"no_validity_mask"}  # train.py refuses these on purpose: score the ti_dfd s42 checkpoint instead
+# Configs that must never be trained: no_validity_mask scores the ti_dfd s42 checkpoint (train.py refuses it), and the
+# temperature sweep reuses the DFD tuning trials; training them would only create duplicate runs for summarize_results.
+EVAL_ONLY = {"no_validity_mask", "temperature_sweep"}
+TRAIN_STAGES = {"train", "tune"}  # stage "evaluate" (E4-E7 scoring configs) only re-scores checkpoints
 RUN_DIR_PREFIX = "Run directory:"
 
 
@@ -151,8 +154,8 @@ def run_one(config_path: Path, args, checkout: dict, env: dict) -> dict:
     key = {"config_path": relative, "config_sha256": sha256(config_path), "commit": checkout["commit"],
            "smoke_test": bool(args.smoke_test)}
     result = {"config": relative, "status": "", "run_id": "", "word_acc": {}}
-    if config.get("variant") in EVAL_ONLY:
-        return {**result, "status": "skipped: eval-only config (score an existing checkpoint with eval.py --config)"}
+    if config.get("variant") in EVAL_ONLY or config.get("stage", "train") not in TRAIN_STAGES:
+        return {**result, "status": "skipped: not a training config (score an existing checkpoint with eval.py)"}
     done = finished(args.drive_runs, key)
     if done:
         return {**result, "status": "already done", "run_id": done}

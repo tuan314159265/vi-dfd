@@ -55,8 +55,8 @@ FAKE_EVAL = textwrap.dedent('''
 ''')
 
 
-def make_config(repo, name, variant="ti_dfd", kd=True, fake="ok", splits=("validation",)):
-    config = {"experiment": "E2", "stage": "tune", "variant": variant, "seed": 42, "fake": fake,
+def make_config(repo, name, variant="ti_dfd", kd=True, fake="ok", splits=("validation",), stage="tune"):
+    config = {"experiment": "E2", "stage": stage, "variant": variant, "seed": 42, "fake": fake,
               "distillation": {"enabled": kd}, "evaluation": {"splits": list(splits)}}
     path = repo / "configs" / f"{name}.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -158,9 +158,13 @@ def test_preflight_refuses_dirty_tree_and_wrong_tag(repo, tmp_path):
 
 def test_eval_only_and_smoke_runs(repo, tmp_path):
     make_config(repo, "d_mask", variant="no_validity_mask")
+    make_config(repo, "e_sweep", variant="temperature_sweep")
+    make_config(repo, "f_score", variant="ti_ce", kd=False, stage="evaluate")
     commit_all(repo)
-    assert queue(repo, tmp_path, "configs/d_mask.yaml", "configs/a_dfd.yaml", extra=("--smoke-test",)) == 0
-    (folder,) = drive_runs(tmp_path)  # the eval-only config is skipped, the smoke run has no checkpoint to score
+    assert queue(repo, tmp_path, "configs/d_mask.yaml", "configs/e_sweep.yaml", "configs/f_score.yaml", "configs/a_dfd.yaml",
+                 extra=("--smoke-test",)) == 0
+    assert len((repo / "calls.log").read_text().splitlines()) == 1  # only a_dfd reached train.py
+    (folder,) = drive_runs(tmp_path)  # the eval-only configs are skipped, the smoke run has no checkpoint to score
     record = json.loads((folder / "queue.json").read_text(encoding="utf-8"))
     assert record["smoke_test"] is True and record["best_checkpoint"] is None and record["word_acc_all"] == {}
     assert yaml.safe_load((folder / "resolved.yaml").read_text(encoding="utf-8"))["diagnostic"] == "fast_dev_run"
