@@ -1,6 +1,6 @@
 # Tiến độ các task của Vinh
 
-Cập nhật: 16/11/2026 (chiều). `main` có Task 7, 11, 14, 26 và phần chuẩn bị Task 15. Nhánh `integrate/clean-history` nối tiếp `main` với notebook dữ liệu của Tiến (bản đã xóa ảnh, `921bb6c`), 3 commit Task 9 của Tuấn (cherry-pick, giữ tác giả) và phần train student của Vinh. Nhánh này **không** chứa commit `9b3ab7e` (ảnh VinText trong output notebook). Xem mục "Các nhánh và ảnh VinText".
+Cập nhật: 18/11/2026. **Tuấn đã xác nhận dữ liệu (pass hết với bản của Tiến): giữ teacher, mọi run KD chạy được từ `exp-v1`.** Đã có `scripts/run_queue.py` và `notebooks/05_colab_run_queue.ipynb` để chạy hàng loạt trên Colab (xem Task 15). Kế hoạch chạy chung và việc tiếp theo của Vinh nằm ở `docs/EXPERIMENTS.md` và mục 5 của `docs/TONG_QUAN_VINH.md`. `main` đã có tag `exp-v1`, 24 config tuning, chưa có run nào. Phần còn lại của file là bản cập nhật chiều 16/11 (nhánh `integrate/clean-history` đã được thay bằng `main`). `main` có Task 7, 11, 14, 26 và phần chuẩn bị Task 15. Nhánh `integrate/clean-history` nối tiếp `main` với notebook dữ liệu của Tiến (bản đã xóa ảnh, `921bb6c`), 3 commit Task 9 của Tuấn (cherry-pick, giữ tác giả) và phần train student của Vinh. Nhánh này **không** chứa commit `9b3ab7e` (ảnh VinText trong output notebook). Xem mục "Các nhánh và ảnh VinText".
 
 ## Trạng thái
 
@@ -10,7 +10,7 @@ Cập nhật: 16/11/2026 (chiều). `main` có Task 7, 11, 14, 26 và phần chu
 | 7 | Bảng phân rã ký tự | **Done** | Đã đối chiếu với charset VinText, bảng giữ nguyên 229 lớp |
 | 11 | Head phân rã cho student | **Done** | Đã kiểm chứng trên PARSeq thật |
 | 14 | Cài DFD và KD thường | **Done** | Đã ghép vào `train.py` (`dfd/student.py`). Smoke test `ti_ce`, `ti_kd`, `ti_dfd` chạy thông trên dữ liệu thật với teacher thật của Tuấn. Xem mục "Train student" |
-| 15 | E2 sơ bộ, chọn siêu tham số | **Đang chờ** | Đã có script sinh grid (12 + 12 trial) và chọn cấu hình, đã có `eval.py`, đã có dữ liệu thật (16/11). Đã có teacher và recipe (16/11). Còn chờ Tuấn xác nhận split, mốc 13 và GPU. Xem "Cần nhắc" |
+| 15 | E2 sơ bộ, chọn siêu tham số | **Sẵn sàng chạy (18/11)** | Teacher đã xác nhận. Có `make`, `select`, `lock`, `run_queue.py` và notebook Colab. Còn chạy 12 trial DFD trên GPU (R07–R18) |
 | 16 | E2 đủ 3 seed + E3 | Chờ Task 15 | |
 | 25 | Đóng gói và hoàn tất nội bộ | Chờ thí nghiệm và báo cáo | |
 | 26 | Pipeline đánh giá `eval.py` (task mới) | **Done** | Đã kiểm chứng trên LMDB giả, checkpoint PARSeq thật và LMDB VinText thật (16/11). Xem mục "Dữ liệu thật" |
@@ -21,7 +21,7 @@ Các task "Cả nhóm" (13, 20, 23, 24) phụ thuộc kết quả chưa có. Cho
 
 | Ai | Việc | Chặn task | Ghi chú |
 |---|---|---|---|
-| **Tuấn** | Gửi `splits/freeze_manifest.json` và `splits/manifests/image_split_assignments.csv` của bản dữ liệu Tuấn tự tạo (chỉ có checksum và image id → split, không có nhãn) | 15 | Teacher được train trên bản dữ liệu Tuấn tạo lại ngày 09/11, không phải bản Tiến gửi: SHA của `freeze_manifest.json` và của cả 4 file LMDB đều khác. Phải xác nhận gán ảnh vào train/val trùng với bản của Tiến thì mới dùng teacher cho E2 được. Xem mục "Teacher của Tuấn" |
+| ~~**Tuấn**~~ | **Xong 18/11: Tuấn báo kiểm tra pass hết với bản của Tiến.** ~~Gửi `splits/freeze_manifest.json` và `splits/manifests/image_split_assignments.csv` của bản dữ liệu Tuấn tự tạo (chỉ có checksum và image id → split, không có nhãn) | 15 | Teacher được train trên bản dữ liệu Tuấn tạo lại ngày 09/11, không phải bản Tiến gửi: SHA của `freeze_manifest.json` và của cả 4 file LMDB đều khác. Phải xác nhận gán ảnh vào train/val trùng với bản của Tiến thì mới dùng teacher cho E2 được. Xem mục "Teacher của Tuấn"~~ |
 | **Cả nhóm** | Chốt dùng **một** bản dữ liệu (đề xuất: bản của Tiến) cho mọi run student và mọi lần chấm điểm | 15, 16 | Kể cả khi split trùng, ảnh crop vẫn khác byte, nên mọi student và mọi bảng kết quả phải dùng chung một bản |
 | **Cả nhóm** | Đồng ý thay `main` bằng nhánh `integrate/clean-history` và xóa ba nhánh remote còn chứa ảnh | Merge | Xem mục "Các nhánh và ảnh VinText" |
 | **Tuấn** | Kết quả E1 (Task 12), nhất là Ti vanilla | 15, mốc 13 | Ti vanilla là mốc so sánh của E2 |
@@ -128,6 +128,10 @@ trainer.fit(student, datamodule)
 
 ## Task 15: phần đã chuẩn bị
 
+- `scripts/run_queue.py` và `notebooks/05_colab_run_queue.ipynb` (18/11): chạy lần lượt train → `eval.py` → kiểm tra → copy lên Drive cho một danh sách config, bỏ qua config đã có bản xong trên Drive (so đường dẫn, SHA-256 của file config và commit). Không resume: run bị ngắt chạy lại từ đầu, vì khi resume vào thư mục mới Lightning quên `best_model_score` và `best-*.ckpt` chỉ là tốt nhất của các epoch sau resume. Đã chạy thử trên máy (CPU, `--smoke-test`) với dữ liệu của Tiến và teacher thật ở tag `exp-v1`: `check_data.py` 27/27, train đọc 23.267 crop train và 2.507 crop val, `eval.py` cho teacher 88,71% val như trước. Sau đó `select` và `lock --dry-run` chạy trên 24 thư mục giả lập cùng định dạng.
+- `select`, `lock` và `summarize_results.py` (18/11) bỏ qua run smoke test và run có `status` khác `completed`. `lock` từ chối khi một trial có hai run (loại bằng `--exclude`).
+- `scripts/e2_tuning.py lock` (17/11): chạy `select`, rồi ghi τ, λ, w_t của trial thắng vào mọi config trong `configs/runs/` theo bảng ở `docs/EXPERIMENTS.md` mục 4, chỉ sửa đúng các dòng đó và ghi `configs/locked_hyperparameters.json`. Từ chối chạy khi thiếu trial hoặc tuning thuộc nhiều commit. Dùng `--dry-run` trước. Hai chỗ khác bảng cũ: `marginal_joint_kd` và `no_validity_mask` cũng nhận w_t (và τ cho `no_validity_mask`), đã sửa bảng.
+- `scripts/summarize_results.py` (17/11): sinh bảng E2, E3 vào `results/summary/`, áp quy tắc quyết định 3, và kiểm tra từng run (siêu tham số khớp bản khóa, tag `exp-v2`, SHA-256 dữ liệu). Chưa chạy trên run thật.
 - `scripts/e2_tuning.py make` sinh 1 YAML cho mỗi trial, seed 42, chỉ đánh giá trên validation, vào `configs/tuning_runs/E2/`. Grid lấy từ `configs/tuning.yaml`: 12 trial DFD và 12 trial KD thường. Script từ chối chạy khi `equal_budget_policy` còn `null`.
 - `scripts/e2_tuning.py select` đọc `results/runs/*/resolved.yaml` và `metrics.csv`, xếp hạng theo word acc validation, hòa thì xét 1-NED rồi thứ tự grid. Nó in cả các trial chưa có kết quả.
 - `scripts/time_kd_step.py` đo ms/step và bộ nhớ đỉnh cho `ti_ce`, `ti_factorized`, `ti_kd`, `ti_dfd` với kích thước Ti/S chính thức. Lệnh cho mốc 13, thay số crop train thật vào:

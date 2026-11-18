@@ -2,17 +2,23 @@
 
     python scripts/e2_tuning.py make     # writes configs/tuning_runs/E2/*.yaml from configs/tuning.yaml
     python scripts/e2_tuning.py select   # reads results/runs/*/{resolved.yaml,metrics.csv}
+    python scripts/e2_tuning.py lock     # select, then write the winners into configs/runs/** (try --dry-run first)
 
 `make` refuses to run while `equal_budget_policy` in configs/tuning.yaml is null:
 the group must first decide how standard KD gets a budget equal to DFD's.
 `select` ranks by validation word accuracy on subset "all", breaking ties by
 higher 1-NED, then by the grid order in configs/tuning.yaml (smaller values first).
+`lock` writes the selected tau / lambda / tone weight into every config named in LOCK_RULES
+(docs/EXPERIMENTS.md, section 4), editing only those lines so comments and layout survive, and
+records the choice in configs/locked_hyperparameters.json. Running it twice changes nothing.
 """
 
 import argparse
 import copy
 import csv
 import itertools
+import json
+import re
 import sys
 from pathlib import Path
 
@@ -27,6 +33,20 @@ from dfd.config import load_config, validate_config  # noqa: E402
 GRIDS = {"ti_dfd": "dfd_grid", "ti_kd": "standard_kd_grid"}
 BASES = {"ti_dfd": "configs/runs/E2/ti_dfd_s42.yaml", "ti_kd": "configs/runs/E2/ti_kd_s42.yaml"}
 KEYS = {"temperature": ("temperature",), "lambda": ("lambda",), "tone_weight": ("component_weights", "tone")}
+
+
+# Which selected values each variant takes: (source, keys). Variants not listed are untouched
+# (ti_ce, ti_factorized, teacher, VietOCR, CRNN have no KD hyperparameters).
+LOCK_RULES = {
+    "ti_dfd": ("dfd", ("temperature", "lambda", "tone_weight")),
+    "ti_kd": ("kd", ("temperature", "lambda")),
+    "no_tone_weight": ("dfd", ("temperature", "lambda")),  # keeps w_t = 1 and no tone confidence weight
+    "joint_kd": ("dfd", ("temperature", "lambda")),  # joint mode never reads the component weights
+    "marginal_joint_kd": ("dfd", ("temperature", "lambda", "tone_weight")),  # full DFD plus the joint term
+    "tone_only_kd": ("dfd", ("temperature", "lambda", "tone_weight")),  # keeps base = modifier = 0
+    "temperature_sweep": ("dfd", ("lambda", "tone_weight")),  # tau stays 1, 2, 4
+    "no_validity_mask": ("dfd", ("temperature", "lambda", "tone_weight")),  # decodes the ti_dfd s42 checkpoint
+}
 
 
 def trial_name(variant: str, values: dict) -> str:
@@ -83,14 +103,34 @@ def make(policy_path: Path, out_dir: Path) -> list[Path]:
     return written
 
 
-def read_runs(runs_dir: Path, split: str) -> list[dict]:
+def run_problem(folder: Path, config: dict, allow_prepared: bool = False):
+    """Why a run folder must not be counted (None if it may be): smoke tests and unfinished runs never count.
+
+    `allow_prepared` accepts folders made by `eval.py --config` (status "prepared"), which train nothing.
+    """
+    if config.get("diagnostic"):
+        return f"diagnostic run ({config['diagnostic']}), e.g. --smoke-test"
+    meta = folder / "metadata.json"
+    if not meta.exists():
+        return "metadata.json is missing"
+    status = json.loads(meta.read_text(encoding="utf-8")).get("status")
+    if status == "completed" or (allow_prepared and status == "prepared"):
+        return None
+    return f"status is {status!r}, not 'completed' (crashed, interrupted or still running)"
+
+
+def read_runs(runs_dir: Path, split: str, exclude=()) -> list[dict]:
     rows = []
     for folder in sorted(path for path in runs_dir.iterdir() if path.is_dir()):
         resolved, metrics = folder / "resolved.yaml", folder / "metrics.csv"
-        if not resolved.exists() or not metrics.exists():
+        if not resolved.exists() or not metrics.exists() or folder.name in exclude:
             continue
         config = yaml.safe_load(resolved.read_text(encoding="utf-8"))
         if config.get("experiment") != "E2" or config.get("stage") != "tune":
+            continue
+        problem = run_problem(folder, config)
+        if problem:
+            print(f"Skipping {folder.name}: {problem}")
             continue
         with metrics.open(encoding="utf-8", newline="") as handle:
             matches = [row for row in csv.DictReader(handle) if row["split"] == split and row["subset"] == "all"]
@@ -109,10 +149,20 @@ def read_runs(runs_dir: Path, split: str) -> list[dict]:
     return rows
 
 
-def select(policy_path: Path, runs_dir: Path) -> dict[str, dict]:
+def duplicate_trials(rows: list[dict]) -> dict[str, list[str]]:
+    """Trials with more than one counted run. Keeping the better one would bias the selection upward."""
+    seen = {}
+    for row in rows:
+        seen.setdefault(trial_name(row["variant"], row["values"]), []).append(row["run_id"])
+    return {name: ids for name, ids in seen.items() if len(ids) > 1}
+
+
+def select(policy_path: Path, runs_dir: Path, exclude=()) -> dict[str, dict]:
     policy = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
     split = policy["selection_split"]
-    rows = read_runs(runs_dir, split)
+    rows = read_runs(runs_dir, split, exclude)
+    for name, ids in duplicate_trials(rows).items():
+        print(f"WARNING: {name} has {len(ids)} runs {ids}; keep one (the first finished) and --exclude the others")
     best = {}
     for variant in BASES:
         order = {trial_name(variant, values): index for index, values in enumerate(grid_trials(policy, variant))}
@@ -131,17 +181,129 @@ def select(policy_path: Path, runs_dir: Path) -> dict[str, dict]:
     return best
 
 
+def expected_values(variant: str, locked: dict) -> dict:
+    """Hyperparameters a config of `variant` must carry after locking ({} if it takes none)."""
+    if variant not in LOCK_RULES:
+        return {}
+    source, keys = LOCK_RULES[variant]
+    return {key: float(locked[source][key]) for key in keys}
+
+
+def current_values(config: dict) -> dict:
+    kd = config["distillation"]
+    return {"temperature": kd.get("temperature"), "lambda": kd.get("lambda"),
+            "tone_weight": (kd.get("component_weights") or {}).get("tone")}
+
+
+def rewrite_distillation(text: str, values: dict) -> str:
+    """Replace temperature, lambda and component_weights.tone inside the top-level `distillation:` block."""
+    lines = text.split("\n")
+    start = next((i for i, line in enumerate(lines) if line.rstrip() == "distillation:"), None)
+    if start is None:
+        raise ValueError("no top-level distillation: block")
+    end = next((i for i in range(start + 1, len(lines)) if lines[i] and not lines[i].startswith(" ")), len(lines))
+    done = set()
+    in_weights = False
+    for i in range(start + 1, end):
+        line = lines[i]
+        indent = len(line) - len(line.lstrip(" "))
+        if indent == 2:
+            in_weights = line.strip().startswith("component_weights:")
+        if indent == 2 and "temperature" in values and line.startswith("  temperature:"):
+            key = "temperature"
+        elif indent == 2 and "lambda" in values and line.startswith("  lambda:"):
+            key = "lambda"
+        elif indent == 4 and in_weights and "tone_weight" in values and line.startswith("    tone:"):
+            key = "tone_weight"
+        else:
+            continue
+        lines[i] = re.sub(r"^(\s+\S+:\s*)([^#\s]+)(.*)$", lambda m: f"{m.group(1)}{float(values[key])!r}{m.group(3)}", line)
+        done.add(key)
+    if done != set(values):
+        raise ValueError(f"could not find {sorted(set(values) - done)} in the distillation block")
+    return "\n".join(lines)
+
+
+def lock(policy_path: Path, runs_dir: Path, configs_dir: Path, locked_out: Path, dry_run: bool = False,
+         allow_incomplete: bool = False, allow_mixed_commits: bool = False, exclude=()) -> list[tuple]:
+    policy = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
+    rows = read_runs(runs_dir, policy["selection_split"], exclude)
+    best = select(policy_path, runs_dir, exclude)
+    problems = [f"{name} has {len(ids)} runs {ids}: --exclude all but one" for name, ids in duplicate_trials(rows).items()]
+    for variant in BASES:
+        have = {trial_name(variant, row["values"]) for row in rows if row["variant"] == variant}
+        grid = [trial_name(variant, values) for values in grid_trials(policy, variant)]
+        missing = [name for name in grid if name not in have]
+        if variant not in best:
+            problems.append(f"{variant}: no results at all")
+        elif missing and not allow_incomplete:
+            problems.append(f"{variant}: {len(missing)} of {len(grid)} grid trials have no results")
+    commits = sorted({row["commit_hash"] for row in rows})
+    if len(commits) > 1 and not allow_mixed_commits:
+        problems.append(f"tuning runs come from {len(commits)} different commits: {[c[:12] for c in commits]}")
+    if problems:
+        raise SystemExit("Refusing to lock:\n  " + "\n  ".join(problems)
+                         + "\n(--allow-incomplete and --allow-mixed-commits override this; use them only if the group agreed)")
+    locked = {"dfd": best["ti_dfd"]["values"], "kd": best["ti_kd"]["values"]}
+
+    changes, edits = [], {}
+    for path in sorted(configs_dir.rglob("*.yaml")):
+        text = path.read_text(encoding="utf-8")
+        config = yaml.safe_load(text)
+        want = expected_values(config.get("variant"), locked)
+        have = current_values(config)
+        diff = {key: value for key, value in want.items() if have[key] != value}
+        if diff:
+            edits[path] = rewrite_distillation(text, diff)
+            changes.extend((path.relative_to(configs_dir).as_posix(), key, have[key], value) for key, value in diff.items())
+
+    print(f"\nLocking DFD {locked['dfd']} and standard KD {locked['kd']}")
+    for name, key, old, new in changes:
+        print(f"  {name}: {key} {old} -> {new}")
+    print(f"{len(edits)} config files change" + (" (dry run, nothing written)" if dry_run else ""))
+    if dry_run:
+        return changes
+
+    for path, text in edits.items():
+        path.write_text(text, encoding="utf-8")
+    for path in sorted(configs_dir.rglob("*.yaml")):  # every config must still validate and hold its values
+        config = load_config(path)
+        for key, value in expected_values(config["variant"], locked).items():
+            if current_values(config)[key] != value:
+                raise RuntimeError(f"{path}: {key} was not locked")
+    record = {
+        "note": "Written by scripts/e2_tuning.py lock; scripts/summarize_results.py checks every main run against it.",
+        "selection_split": policy["selection_split"], "tuning_commit": commits[0],
+        "tuning_runs": sorted(row["run_id"] for row in rows), "excluded_runs": sorted(exclude),
+        "dfd": {**locked["dfd"], **{key: best["ti_dfd"][key] for key in ("run_id", "word_acc", "ned_score")}},
+        "kd": {**locked["kd"], **{key: best["ti_kd"][key] for key in ("run_id", "word_acc", "ned_score")}},
+    }
+    locked_out.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+    print(f"Wrote {locked_out}")
+    return changes
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("command", choices=["make", "select"])
+    parser.add_argument("command", choices=["make", "select", "lock"])
     parser.add_argument("--policy", type=Path, default=ROOT / "configs/tuning.yaml")
     parser.add_argument("--out", type=Path, default=ROOT / "configs/tuning_runs/E2")
     parser.add_argument("--runs", type=Path, default=ROOT / "results/runs")
+    parser.add_argument("--configs", type=Path, default=ROOT / "configs/runs", help="lock: the configs to rewrite")
+    parser.add_argument("--locked-out", type=Path, default=ROOT / "configs/locked_hyperparameters.json")
+    parser.add_argument("--dry-run", action="store_true", help="lock: print the changes, write nothing")
+    parser.add_argument("--allow-incomplete", action="store_true", help="lock: accept missing grid trials")
+    parser.add_argument("--allow-mixed-commits", action="store_true", help="lock: accept tuning runs from several commits")
+    parser.add_argument("--exclude", action="append", default=[], metavar="RUN_ID",
+                        help="select/lock: run folder name that must not count (repeat for several)")
     args = parser.parse_args()
     if args.command == "make":
         make(args.policy, args.out)
+    elif args.command == "lock":
+        lock(args.policy, args.runs, args.configs, args.locked_out, args.dry_run, args.allow_incomplete,
+             args.allow_mixed_commits, args.exclude)
     else:
-        best = select(args.policy, args.runs)
+        best = select(args.policy, args.runs, args.exclude)
         for variant, row in best.items():
             print(f"\nSelected {variant}: {row['values']} (run {row['run_id']}, commit {row['commit_hash'][:12]})")
     return 0

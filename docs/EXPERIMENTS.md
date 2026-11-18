@@ -1,6 +1,6 @@
 # Kế hoạch chạy thí nghiệm E1–E7
 
-Cập nhật 16/11/2026. Đóng băng thí nghiệm ngày **27/11/2026**. File này là nơi chốt chung: chạy thí nghiệm nào, chạy bằng lệnh gì, ai code, ai chạy. Mọi số liệu đưa vào báo cáo phải đến từ các run làm đúng theo file này.
+Cập nhật 18/11/2026. Đóng băng thí nghiệm ngày **27/11/2026**. File này là nơi chốt chung: chạy thí nghiệm nào, chạy bằng lệnh gì, ai code, ai chạy. Mọi số liệu đưa vào báo cáo phải đến từ các run làm đúng theo file này.
 
 ## 1. Tóm tắt
 
@@ -23,7 +23,7 @@ Hai run chỉ so sánh được với nhau khi các mục dưới đây trùng n
 | Mục | Giá trị chốt | Kiểm tra bằng | Trạng thái |
 |---|---|---|---|
 | Dữ liệu | Bản VinText của Tiến gửi ngày 16/11 (`lmdb/` + `splits/`) | `scripts/check_data.py` so SHA-256 với `configs/data_reference.json` | Chốt (quyết định 1, mục 7) |
-| Teacher | `best-epoch=17-validation_word_acc=0.8867.ckpt` của Tuấn, SHA-256 `e185cec4…bd609` | `check_data.py --teacher-checkpoint` | Tuấn tự kiểm tra trước khi đặt tag `exp-v1` (quyết định 2, mục 7) |
+| Teacher | `best-epoch=17-validation_word_acc=0.8867.ckpt` của Tuấn, SHA-256 `e185cec4…bd609` | `check_data.py --teacher-checkpoint` | **Chốt 18/11:** Tuấn kiểm tra pass hết với bản của Tiến, giữ teacher này (quyết định 2, mục 7) |
 | Code | Một tag Git chung, đặt trên `main`: `exp-v1` cho đợt đầu, `exp-v2` sau khi khóa siêu tham số | `metadata.json` ghi commit, `train.py` từ chối chạy nếu working tree bẩn | Đặt tag sau khi merge file này |
 | PARSeq upstream | Commit `1902db043c029a7e03a3818c616c06600af574be` | `dfd/parseq.py` tự kiểm tra | Chốt |
 | Thư viện | `requirements-teacher.txt` (torch 2.5.1, Lightning 2.2.0.post0, …) | `environment.txt` trong mỗi run | Chốt |
@@ -78,10 +78,12 @@ python train.py --config <config.yaml> --data-root $DATA --teacher-checkpoint "$
 RUN=results/runs/<run_id>
 python eval.py --run-dir $RUN --checkpoint $RUN/checkpoints/best-*.ckpt --device cuda
 
-# 3. Upload cả thư mục $RUN lên Drive nhóm: Vi-DFD/runs/<run_id>/
+# 3. Upload cả thư mục $RUN lên Drive nhóm: <thư mục nhóm>/runs/<run_id>/
 ```
 
-Run bị ngắt giữa chừng thì resume bằng `--resume $RUN/checkpoints/last.ckpt` với **đúng** config và dữ liệu cũ. Run resume không được tính là seed mới.
+**Cách chạy khuyến nghị:** dùng `notebooks/05_colab_run_queue.ipynb` (Colab) hoặc `scripts/run_queue.py`. Notebook làm đủ mục 3 (clone đúng tag, cài thư viện, copy dữ liệu và teacher từ Drive, `check_data.py` phải báo 27/27, `pytest`), rồi chạy lần lượt 3 bước trên cho từng config trong hàng đợi. Nó kiểm tra run `completed` và có đúng một `best-*.ckpt`, kiểm tra `metrics.csv` có đủ split, ghi `queue.json` rồi mới copy lên Drive. Mở lại notebook ở phiên sau thì config đã xong được bỏ qua.
+
+**Run bị ngắt giữa chừng thì chạy lại từ đầu, không resume.** `train.py --resume` tạo thư mục run mới. Khi thư mục checkpoint đổi, Lightning không nạp lại `best_model_score`, nên `best-*.ckpt` của run resume chỉ là tốt nhất trong các epoch **sau** khi resume, không phải của cả run. Run student 20–40 phút nên chạy lại rẻ hơn. Nếu buộc phải resume (run dài), so `validation_word_acc` trong tên file `best-*.ckpt` của thư mục cũ và thư mục mới, rồi chấm file cao hơn bằng `eval.py --run-dir <thư mục mới> --checkpoint <file đó>`. Run resume không được tính là seed mới.
 
 ### E1: baseline và teacher
 
@@ -101,18 +103,22 @@ python eval.py --run-dir $RUN --checkpoint $RUN/checkpoints/best-*.ckpt --device
 
 Grid ở `configs/tuning.yaml`: DFD gồm τ ∈ {1, 2, 4} × λ ∈ {0,5; 1} × w_t ∈ {1, 2} (12 trial), KD thường gồm τ ∈ {1, 2, 4} × λ ∈ {0,25; 0,5; 1; 2} (12 trial). `ti_ce` và `ti_factorized` không có siêu tham số KD nên không tuning.
 
-Xong 24 trial: mọi người upload thư mục run. Vinh tải `resolved.yaml` và `metrics.csv` của 24 run về `results/runs/`, rồi chạy `python scripts/e2_tuning.py select`. Trial diverge vẫn giữ trong bảng, không chạy lại để thay.
+Xong 24 trial: mọi người upload thư mục run. Vinh tải `resolved.yaml` và `metrics.csv` của 24 run về `results/runs/`, rồi chạy `python scripts/e2_tuning.py select`. Trial diverge vẫn giữ trong bảng, không chạy lại để thay. `select`, `lock` và `summarize_results.py` tự bỏ qua run smoke test (`--smoke-test`) và run có `status` khác `completed` trong `metadata.json` (bị ngắt, lỗi), và in lý do. Nếu một trial có hai run hoàn chỉnh (hai người cùng chạy), `lock` từ chối: giữ run xong trước, loại run kia bằng `--exclude <run_id>`, không chọn run tốt hơn. Danh sách run đã dùng và đã loại được ghi vào `configs/locked_hyperparameters.json`.
 
 **Khóa cấu hình (Vinh, một commit duy nhất, rồi đặt tag `exp-v2`):** ghi τ, λ, w_t đã chọn vào các config dưới đây. Sau commit này không ai sửa siêu tham số nữa.
+
+Dùng `python scripts/e2_tuning.py lock --dry-run` để xem thay đổi, rồi `lock` để ghi. Lệnh từ chối chạy nếu thiếu trial hoặc 24 trial thuộc nhiều commit, chỉ sửa đúng dòng `temperature`, `lambda`, `tone` (giữ nguyên comment), và ghi lựa chọn vào `configs/locked_hyperparameters.json` để `summarize_results.py` kiểm tra lại.
 
 | Config | Lấy giá trị nào |
 |---|---|
 | `E2/ti_dfd_s4{2,3,4}`, `E4`, `E5`, `E6`, `E7` của `ti_dfd` | τ, λ, w_t của DFD |
 | `E2/ti_kd_s4{2,3,4}` và các config `ti_kd` của E5, E6, E7 | τ, λ của KD thường |
 | `E3/no_tone_weight_*` | τ, λ của DFD. Giữ w_t = 1 và `tone_confidence_weight: false` |
-| `E3/joint_kd_*`, `E3/marginal_joint_kd_*` | τ, λ của DFD. `joint_lambda` giữ 1,0 |
+| `E3/joint_kd_*` | τ, λ của DFD (mode joint không đọc trọng số thành phần) |
+| `E3/marginal_joint_kd_*` | τ, λ, w_t của DFD, vì loss là DFD đầy đủ cộng Joint KD. `joint_lambda` giữ 1,0 |
 | `E3/tone_only_kd_*` | τ, λ, w_t của DFD. Giữ trọng số base = modifier = 0 |
-| `E3/temperature_sweep_*`, `E3/no_validity_mask_*` | λ, w_t của DFD (τ của sweep giữ nguyên 1, 2, 4) |
+| `E3/temperature_sweep_*` | λ, w_t của DFD (τ giữ nguyên 1, 2, 4) |
+| `E3/no_validity_mask_*` | τ, λ, w_t của DFD, vì nó chấm lại checkpoint `ti_dfd` s42 |
 
 ### E2 giai đoạn 2: chạy chính (10 run mới, tag `exp-v2`)
 
@@ -125,7 +131,7 @@ Xong 24 trial: mọi người upload thư mục run. Vinh tải `resolved.yaml` 
 
 `ti_ce` và `ti_factorized` không cần teacher hay tuning, nên **chạy được ngay từ tag `exp-v1`**, song song với tuning. Riêng 6 run này được miễn quy tắc tag `exp-v2`, vì commit khóa cấu hình không đụng tới config của chúng.
 
-Quy tắc kết luận: xem quyết định 3 ở mục 7 (hiệu theo cặp seed, độ lệch chuẩn mẫu của hiệu).
+Quy tắc kết luận: xem quyết định 3 ở mục 7 (hiệu theo cặp seed, độ lệch chuẩn mẫu của hiệu). Bảng E2, E3 do `python scripts/summarize_results.py` sinh ra (ghi vào `results/summary/`), sau khi kiểm tra từng run về siêu tham số đã khóa, tag `exp-v2` và SHA-256 dữ liệu.
 
 ### E3: ablation (8 run mới, tag `exp-v2`)
 
@@ -213,6 +219,8 @@ Các quyết định dưới đây áp dụng cho mọi run và mọi bảng k�
 python scripts/check_data.py --data-root <bản của Tiến> --compare-assignments <bản Tuấn đã dùng train teacher>
 ```
 
+**Kết quả (Tuấn báo 18/11): pass hết với bản của Tiến. Giữ teacher hiện tại, không train lại, `configs/data_reference.json` không đổi.** Mọi run KD chạy được từ tag `exp-v1`.
+
 - **Nếu báo `0 differ`:** cách gán ảnh vào split trùng nhau. Giữ teacher hiện tại. Ảnh crop khác byte cũng không sao, vì teacher chỉ cung cấp phân phối mềm, còn mọi student đều train và chấm trên bản của Tiến. Báo cáo ghi rõ chi tiết này.
 - **Nếu có ảnh khác split:** train lại teacher trên bản của Tiến, khoảng 30 phút trên RTX 3060: `python train.py --config configs/runs/E1/teacher_s42.yaml --data-root <bản của Tiến>`. Code train teacher giờ chạy được với bản của Tiến, không cần `vocabulary.json` hay `preparation.json`. Xong thì mở PR cập nhật `teacher_checkpoint` trong `configs/data_reference.json`, rồi mới đặt tag.
 
@@ -261,7 +269,7 @@ Như vậy chênh lệch word acc so với full DFD **đúng bằng** số crop 
 
 **7. E4 dùng một teacher.** Chỉ dùng teacher seed 42, đúng với `teacher_seed_policy: single_frozen_teacher_seed_42` trong `configs/tuning.yaml`. Student vẫn ba seed. Bảng E4 ghi "teacher: 1 seed", và báo cáo sửa câu "3 seed" trong bảng của proposal. Train thêm hai teacher tốn GPU mà không trả lời thêm câu hỏi nào của RQ1.
 
-**8. Drive và sheet.** Vinh tạo thư mục `Vi-DFD/` trên Drive ở chế độ private, chỉ chia sẻ cho ba thành viên:
+**8. Drive và sheet.** Vinh tạo thư mục `Vi-DFD/` trên Drive ở chế độ private, chỉ chia sẻ cho ba thành viên (thư mục thực tế đang tên `BTL DL`; notebook nhận đường dẫn qua `DRIVE_ROOT`):
 
 | Thư mục | Nội dung |
 |---|---|
