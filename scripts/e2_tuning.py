@@ -119,7 +119,7 @@ def run_problem(folder: Path, config: dict, allow_prepared: bool = False):
     return f"status is {status!r}, not 'completed' (crashed, interrupted or still running)"
 
 
-def read_runs(runs_dir: Path, split: str, exclude=()) -> list[dict]:
+def read_runs(runs_dir: Path, split: str, exclude=(), policy=None) -> list[dict]:
     rows = []
     for folder in sorted(path for path in runs_dir.iterdir() if path.is_dir()):
         resolved, metrics = folder / "resolved.yaml", folder / "metrics.csv"
@@ -141,6 +141,13 @@ def read_runs(runs_dir: Path, split: str, exclude=()) -> list[dict]:
         values = {"temperature": kd["temperature"], "lambda": kd["lambda"]}
         if config["variant"] == "ti_dfd":
             values["tone_weight"] = kd["component_weights"]["tone"]
+        if policy is not None and (
+            config.get("seed") != policy["tuning_seed"]
+            or config["variant"] not in BASES
+            or values not in grid_trials(policy, config["variant"])
+        ):
+            print(f"Skipping {folder.name}: outside the tuning grid or wrong seed")
+            continue
         rows.append({
             "variant": config["variant"], "values": values, "run_id": folder.name,
             "commit_hash": matches[0]["commit_hash"],
@@ -160,7 +167,7 @@ def duplicate_trials(rows: list[dict]) -> dict[str, list[str]]:
 def select(policy_path: Path, runs_dir: Path, exclude=()) -> dict[str, dict]:
     policy = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
     split = policy["selection_split"]
-    rows = read_runs(runs_dir, split, exclude)
+    rows = read_runs(runs_dir, split, exclude, policy)
     for name, ids in duplicate_trials(rows).items():
         print(f"WARNING: {name} has {len(ids)} runs {ids}; keep one (the first finished) and --exclude the others")
     best = {}
@@ -227,7 +234,7 @@ def rewrite_distillation(text: str, values: dict) -> str:
 def lock(policy_path: Path, runs_dir: Path, configs_dir: Path, locked_out: Path, dry_run: bool = False,
          allow_incomplete: bool = False, allow_mixed_commits: bool = False, exclude=()) -> list[tuple]:
     policy = yaml.safe_load(policy_path.read_text(encoding="utf-8"))
-    rows = read_runs(runs_dir, policy["selection_split"], exclude)
+    rows = read_runs(runs_dir, policy["selection_split"], exclude, policy)
     best = select(policy_path, runs_dir, exclude)
     problems = [f"{name} has {len(ids)} runs {ids}: --exclude all but one" for name, ids in duplicate_trials(rows).items()]
     for variant in BASES:

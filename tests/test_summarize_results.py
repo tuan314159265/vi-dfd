@@ -212,3 +212,14 @@ def test_trained_run_left_in_prepared_state_is_not_counted(tmp_path):
     assert summarize_results.load_runs(runs) == []
     make_run(runs, "mask", experiment="E3", variant="no_validity_mask", seed=42, acc=0.8, validity=False)
     assert [run["id"] for run in summarize_results.load_runs(runs)] == ["mask"]
+
+
+def test_missing_test_provenance_is_rejected(tmp_path):
+    populate(tmp_path)
+    path = tmp_path / "ti_dfd_43" / "eval_info.json"
+    info = json.loads(path.read_text())
+    info["splits"] = {}
+    path.write_text(json.dumps(info))
+    result = run_summary(tmp_path)
+    assert any("does not cover split 'test'" in p for p in result["problems"])
+    assert ("ti_dfd", 43) not in result["chosen"]

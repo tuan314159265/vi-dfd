@@ -55,7 +55,7 @@ def write_run(runs, name, variant, tau, lam, wt, word_acc, ned=0.9, split="valid
     folder.mkdir(parents=True)
     (folder / "metadata.json").write_text(json.dumps({"run_id": name, "status": status}), encoding="utf-8")
     kd = {"temperature": tau, "lambda": lam, "component_weights": {"base": 1.0, "modifier": 1.0, "tone": wt}}
-    config = {"experiment": "E2", "stage": "tune", "variant": variant, "distillation": kd}
+    config = {"experiment": "E2", "stage": "tune", "variant": variant, "seed": 42, "distillation": kd}
     if diagnostic:
         config["diagnostic"] = diagnostic
     (folder / "resolved.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
@@ -190,3 +190,15 @@ def test_lock_refuses_duplicate_trials_until_excluded(policy, locked_setup):
     e2_tuning.lock(policy, runs, configs, out, exclude=["dfd_rerun"])
     record = json.loads(out.read_text(encoding="utf-8"))
     assert record["excluded_runs"] == ["dfd_rerun"] and len(record["tuning_runs"]) == 24
+
+
+def test_select_ignores_outside_grid_and_wrong_seed(policy, tmp_path):
+    runs = tmp_path / "runs"
+    write_run(runs, "valid", "ti_kd", 2., 1., 1., .8)
+    write_run(runs, "outside", "ti_kd", 99., 99., 1., .99)
+    write_run(runs, "wrong_seed", "ti_kd", 1., .5, 1., .98)
+    path = runs / "wrong_seed" / "resolved.yaml"
+    config = yaml.safe_load(path.read_text())
+    config["seed"] = 43
+    path.write_text(yaml.safe_dump(config))
+    assert e2_tuning.select(policy, runs)["ti_kd"]["run_id"] == "valid"

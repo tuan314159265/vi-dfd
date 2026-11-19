@@ -176,7 +176,7 @@ def check_run(run: dict, reference: dict, locked: dict, tags_for) -> tuple[list[
         if entry.get("lmdb_sha256") != expected:
             problems.append(f"{name}: scored on a different '{split}' LMDB than configs/data_reference.json")
     if "test" not in (info.get("splits") or {}):
-        warnings.append(f"{name}: eval_info.json does not cover split 'test' (a later eval.py call overwrote it)")
+        problems.append(f"{name}: eval_info.json does not cover split 'test'; rerun evaluation on test")
     if info.get("precision") not in ("fp32", None):
         problems.append(f"{name}: scored at precision {info['precision']}")
     want_mask = config["variant"] != "no_validity_mask"
@@ -247,6 +247,8 @@ def summarize(runs: list[dict], locked: dict, reference: dict, tags_for=git_tags
             for text in run_warnings:
                 if text not in warnings:
                     warnings.append(text)
+            if run_problems:
+                continue
             chosen[key] = run
             used.append({"table": slot["table"], "label": slot["label"], "seed": slot["seed"], "run_id": run["id"],
                          "stage": run["config"].get("stage"), "commit_hash": commit_of(run)})
