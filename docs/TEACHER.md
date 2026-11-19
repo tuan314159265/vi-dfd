@@ -129,6 +129,12 @@ state. Resume creates a new artifact directory; worker augmentation order is not
 to be bitwise identical to an uninterrupted run. Preserve the original and resumed
 artifact paths together when reporting one logical run.
 
+Because the artifact directory changes, Lightning's `ModelCheckpoint` does not reload
+`best_model_score`: the resumed run's `best-*.ckpt` is the best of the epochs after the
+resume only. Compare `validation_word_acc` in the `best-*.ckpt` names of both directories
+and score the higher one. For student runs (20-40 min) prefer rerunning from scratch;
+`scripts/run_queue.py` never resumes.
+
 ## Status boundary
 
 Task 9 implements teacher training only. It does not claim that the teacher is already
