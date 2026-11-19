@@ -32,6 +32,16 @@ claim one config within the settle window; `e2_tuning.py lock` and summarize_res
 (--run-minutes, or the longest run seen in this session if longer), so a ~3 h Colab T4 session does not die
 half-way through a run.
 
+eval.py at exp-v1 imports strhub without putting the pinned PARSeq checkout on sys.path (train.py does that via
+dfd/teacher.py), so the runner adds $PARSEQ_ROOT (default ~/.cache/vi-dfd/parseq, checked against the commit pinned
+in dfd/parseq.py) to PYTHONPATH for train.py and eval.py. No file of the tagged checkout changes.
+
+--rescore <folder> trains nothing: it scores run folders that finished training but were never uploaded (copied out
+of a Colab VM after eval.py failed), with the same checks, queue.json and upload as a normal run. Each folder is
+matched to the queue config it was trained from (every non-null value of the config must appear unchanged in the
+run's resolved.yaml, and the run's commit must be the checkout's), so a rescored run counts as done for that config.
+Run it in one tab only: it takes no claims.
+
 Interrupted runs are NOT resumed: they are rerun from scratch. A resumed run gets a new run folder, and
 Lightning's ModelCheckpoint then forgets the best score seen before the interruption (it reloads it only when
 the checkpoint folder is unchanged), so best-*.ckpt would be the best of the epochs after the resume only.
@@ -46,6 +56,7 @@ import hashlib
 import json
 import os
 import random
+import re
 import shutil
 import signal
 import socket
@@ -138,6 +149,26 @@ def stream(command: list[str], cwd: Path, env: dict, log: Path) -> tuple[int, Pa
     if run_dir is not None and not run_dir.is_absolute():
         run_dir = cwd / run_dir
     return code, run_dir
+
+
+def parseq_env(env: dict, repo: Path) -> tuple[dict, Path | None]:
+    """Put the pinned PARSeq checkout on PYTHONPATH for the child scripts (eval.py does not add it itself)."""
+    root = Path(env.get("PARSEQ_ROOT") or Path.home() / ".cache/vi-dfd/parseq").expanduser()
+    if not (root / "strhub").is_dir():
+        return env, None
+    source = repo / "dfd" / "parseq.py"
+    pinned = re.search(r'PARSEQ_COMMIT\s*=\s*"([0-9a-f]{40})"', source.read_text(encoding="utf-8")) \
+        if source.is_file() else None
+    if pinned and (root / ".git").exists():
+        revision = git(root, "rev-parse", "HEAD")
+        if revision != pinned.group(1):
+            raise SystemExit(f"PARSeq at {root} is at {revision[:12]}, the checkout pins {pinned.group(1)[:12]}")
+        if git(root, "status", "--porcelain", "--untracked-files=no"):
+            raise SystemExit(f"PARSeq at {root} has local changes")
+    paths = [part for part in env.get("PYTHONPATH", "").split(os.pathsep) if part]
+    if str(root) not in paths:
+        paths.insert(0, str(root))
+    return {**env, "PYTHONPATH": os.pathsep.join(paths)}, root
 
 
 def now_utc() -> str:
@@ -358,6 +389,90 @@ def train_and_upload(config_path: Path, config: dict, relative: str, key: dict, 
         return {**result, "status": f"failed: {error}"}
 
 
+def leaves(node, prefix=()):
+    if isinstance(node, dict):
+        for name, value in node.items():
+            yield from leaves(value, (*prefix, name))
+    else:
+        yield prefix, node
+
+
+def trained_from(config: dict, resolved: dict) -> bool:
+    """train.py only fills null fields (data paths, teacher) and adds `diagnostic`: every set value must survive."""
+    for path, value in leaves(config):
+        if value is None:
+            continue
+        node = resolved
+        for name in path:
+            if not isinstance(node, dict) or name not in node:
+                return False
+            node = node[name]
+        if node != value:
+            return False
+    return True
+
+
+def rescore_one(source: Path, candidates: list, args, checkout: dict, env: dict) -> dict:
+    """Score one rescued run folder and upload it as if the queue had finished it."""
+    result = {"config": "", "status": "", "run_id": source.name, "word_acc": {}}
+    try:
+        meta = json.loads((source / "metadata.json").read_text(encoding="utf-8"))
+        commit = meta.get("commit_hash", checkout["commit"])
+        if commit != checkout["commit"]:
+            return {**result, "status": f"skipped: trained at {commit[:12]}, checkout is {checkout['commit'][:12]}"}
+        resolved = yaml.safe_load((source / "resolved.yaml").read_text(encoding="utf-8"))
+        if resolved.get("diagnostic"):
+            return {**result, "status": "skipped: smoke test"}
+        found = [(path, config) for path, config in candidates if trained_from(config, resolved)]
+        if len(found) != 1:
+            return {**result, "status": f"skipped: matches {len(found)} queue configs {[p.name for p, _ in found]}"}
+        config_path, config = found[0]
+        relative = config_path.relative_to(args.repo).as_posix()
+        result["config"] = relative
+        key = {"config_path": relative, "config_sha256": sha256(config_path), "commit": checkout["commit"],
+               "smoke_test": False}
+        done = finished(args.drive_runs, key)
+        if done:
+            return {**result, "status": "already done", "run_id": done}
+        check_trained(source, False)
+        run_dir = args.log_dir.parent / "rescore" / source.name  # a local copy: eval.py writes into the run folder
+        if run_dir.exists():
+            shutil.rmtree(run_dir)
+        shutil.copytree(source, run_dir)
+        best = check_trained(run_dir, False)
+        print(f"\n===== rescore {source.name} ({relative}) =====", flush=True)
+        eval_log = args.log_dir / f"{source.name}.rescore.log"
+        started = time.time()
+        code, _ = stream([sys.executable, "eval.py", "--run-dir", str(run_dir), "--checkpoint", str(best),
+                          "--device", args.device], args.repo, env, eval_log)
+        eval_seconds = time.time() - started
+        shutil.copy2(eval_log, run_dir / "eval_log.txt")
+        if code != 0:
+            raise RuntimeError(f"eval.py exited with code {code} (log: {eval_log})")
+        scores = check_scored(run_dir, list((config.get("evaluation") or {}).get("splits") or []))
+        record = {**key, "status": "done", "run_id": run_dir.name, "tags": checkout["tags"], "best_checkpoint": best.name,
+                  "word_acc_all": scores, "train_seconds": meta.get("elapsed_seconds"),
+                  "eval_seconds": round(eval_seconds, 1), "platform": meta.get("platform"), "worker": args.worker,
+                  "finished_utc": now_utc(), "rescored_from": str(source)}
+        (run_dir / "queue.json").write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+        target = upload(run_dir, args.drive_runs, args.upload_last)
+        shutil.rmtree(run_dir)
+        return {**result, "status": "done", "word_acc": scores, "uploaded": str(target)}
+    except (OSError, RuntimeError, ValueError, KeyError, json.JSONDecodeError, yaml.YAMLError) as error:
+        return {**result, "status": f"failed: {error}"}
+
+
+def rescore(args, checkout: dict, env: dict, configs: list[Path]) -> list[dict]:
+    candidates = []
+    for path in configs:
+        config = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if config.get("variant") not in EVAL_ONLY and config.get("stage", "train") in TRAIN_STAGES:
+            candidates.append((path, config))
+    folders = sorted(path for path in args.rescore.iterdir() if (path / "metadata.json").is_file())
+    print(f"Rescoring {len(folders)} run folders from {args.rescore} against {len(candidates)} queue configs", flush=True)
+    return [rescore_one(folder, candidates, args, checkout, env) for folder in folders]
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("configs", nargs="+", help="config paths or globs, relative to --repo")
@@ -384,6 +499,8 @@ def main(argv=None) -> int:
     parser.add_argument("--retry-failed", action="store_true", help="also take configs that failed on another worker")
     parser.add_argument("--shuffle", action="store_true",
                         help="walk the queue in an order seeded by --worker, so parallel tabs start on different configs")
+    parser.add_argument("--rescore", type=Path, help="score the run folders in this folder that trained but were never "
+                        "uploaded (eval.py failed); trains nothing, ignores --shard")
     parser.add_argument("--shard", help="i/n: only the configs at positions i, i+n, ... of the expanded queue")
     parser.add_argument("--time-budget-minutes", type=float,
                         help="do not start a config when less than one run of time is left (Colab T4 session ~180)")
@@ -410,11 +527,16 @@ def main(argv=None) -> int:
 
     checkout = preflight(args.repo, args.require_tag)
     configs = expand(args.repo, args.configs)
+    env, parseq_root = parseq_env({**os.environ, "DFD_PLATFORM": args.platform}, args.repo)
+    print(f"PARSeq on PYTHONPATH: {parseq_root or 'not found (eval.py needs strhub importable)'}", flush=True)
+    if args.rescore:  # the whole queue (no shard): a rescued run may come from any tab
+        if not args.rescore.is_dir():
+            parser.error(f"--rescore {args.rescore} is not a folder")
+        return summarize(rescore(args, checkout, env, configs))
     if shard:
         configs = configs[shard[0]::shard[1]]
     if args.shuffle:
         random.Random(args.worker).shuffle(configs)
-    env = {**os.environ, "DFD_PLATFORM": args.platform}
     print(f"Queue of {len(configs)} configs at {checkout['commit'][:12]} {checkout['tags']} -> {args.drive_runs} "
           f"(worker {args.worker})", flush=True)
 
@@ -441,11 +563,14 @@ def main(argv=None) -> int:
             longest = max(longest, (time.time() - run_started) / 60)
         if result["status"].startswith("failed") and args.stop_on_failure:
             break
+    return summarize(results)
 
+
+def summarize(results: list[dict]) -> int:
     print("\n===== queue summary =====")
     for result in results:
         scores = " ".join(f"{split}={value:.4f}" for split, value in result["word_acc"].items())
-        status = result["status"] if result["status"].startswith("blocked") else result["status"][:60]
+        status = result["status"] if result["status"].startswith(("blocked", "skipped: ")) else result["status"][:60]
         print(f"{status:<60} {result['config']} {result['run_id']} {scores}")
     failed = [result for result in results if result["status"].startswith("failed")]
     print(f"{sum(r['status'] == 'done' for r in results)} done now, "

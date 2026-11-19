@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import shutil
 import subprocess
 import textwrap
 from pathlib import Path
@@ -29,7 +30,7 @@ FAKE_TRAIN = textwrap.dedent('''
     (run / "resolved.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
     (run / "metrics.csv").write_text("run_id,split,subset,word_acc\\n", encoding="utf-8")
     print("Run directory:", run.resolve(), flush=True)
-    Path("calls.log").open("a").write(json.dumps({"teacher": a.teacher_checkpoint, "platform": os.environ.get("DFD_PLATFORM")}) + "\\n")
+    Path("calls.log").open("a").write(json.dumps({"teacher": a.teacher_checkpoint, "platform": os.environ.get("DFD_PLATFORM"), "pythonpath": os.environ.get("PYTHONPATH", "")}) + "\\n")
     if mode == "crash":
         raise SystemExit(3)
     if not a.smoke_test:
@@ -41,11 +42,13 @@ FAKE_TRAIN = textwrap.dedent('''
     (run / "metadata.json").write_text(json.dumps({"run_id": run.name, "status": status}), encoding="utf-8")
 ''')
 FAKE_EVAL = textwrap.dedent('''
-    import argparse, yaml
+    import argparse, os, yaml
     from pathlib import Path
     p = argparse.ArgumentParser()
     p.add_argument("--run-dir"); p.add_argument("--checkpoint"); p.add_argument("--device")
     a = p.parse_args()
+    if os.environ.get("FAKE_EVAL_FAIL"):
+        raise SystemExit("ImportError: cannot import name 'DistilledPARSeq'")
     run = Path(a.run_dir)
     config = yaml.safe_load((run / "resolved.yaml").read_text(encoding="utf-8"))
     splits = [] if config.get("fake") == "no_rows" else config["evaluation"]["splits"]
@@ -286,3 +289,64 @@ def test_two_parallel_workers_split_the_queue_without_duplicates(repo, tmp_path)
     assert configs == sorted(f"configs/{n}.yaml" for n in ("a_dfd", "b_ce", "c_ce", "d_ce", "e_ce", "f_ce"))
     assert {record["worker"] for record in records} == {"tab-a", "tab-b"}  # both tabs did part of the work
     assert len((repo / "calls.log").read_text().splitlines()) == 6  # no config trained twice
+
+
+def test_parseq_checkout_is_put_on_pythonpath(repo, tmp_path, monkeypatch):
+    parseq = tmp_path / "parseq"
+    (parseq / "strhub").mkdir(parents=True)
+    monkeypatch.setenv("PARSEQ_ROOT", str(parseq))
+    assert queue(repo, tmp_path, "configs/a_dfd.yaml") == 0
+    (call,) = [json.loads(line) for line in (repo / "calls.log").read_text().splitlines()]
+    assert str(parseq) in call["pythonpath"].split(run_queue.os.pathsep)
+
+
+def test_rescore_scores_and_uploads_a_rescued_run(repo, tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("FAKE_EVAL_FAIL", "1")
+    assert queue(repo, tmp_path, "configs/a_dfd.yaml", extra=("--worker", "vinh-acc3")) == 1
+    assert not drive_runs(tmp_path)  # eval.py failed: nothing uploaded, the trained run is only on the VM
+    (local,) = (repo / "results" / "runs").iterdir()
+    rescue = tmp_path / "drive_rescue"
+    rescue.mkdir()
+    shutil.copytree(local, rescue / local.name)
+    (rescue / "queue_logs_vinh-acc3").mkdir()  # the rescue cell also copies the logs: not a run folder
+    smoke = rescue / "smoke_run"
+    shutil.copytree(local, smoke)
+    resolved = yaml.safe_load((smoke / "resolved.yaml").read_text(encoding="utf-8"))
+    (smoke / "resolved.yaml").write_text(yaml.safe_dump({**resolved, "diagnostic": "fast_dev_run"}), encoding="utf-8")
+    monkeypatch.delenv("FAKE_EVAL_FAIL")
+    capsys.readouterr()
+    assert queue(repo, tmp_path, "configs/*.yaml", extra=("--worker", "vinh-acc1", "--rescore", str(rescue))) == 0
+    assert "skipped: smoke test" in capsys.readouterr().out
+    (folder,) = drive_runs(tmp_path)
+    assert folder.name == local.name
+    record = json.loads((folder / "queue.json").read_text(encoding="utf-8"))
+    assert record["status"] == "done" and record["config_path"] == "configs/a_dfd.yaml"
+    assert record["word_acc_all"] == {"validation": 0.7123} and record["rescored_from"] == str(rescue / local.name)
+    assert not (folder / "checkpoints" / "last.ckpt").exists()
+    assert len((repo / "calls.log").read_text().splitlines()) == 1  # rescoring trains nothing
+    # the queue now counts the config as done (the failed claim no longer matters), and a second rescore is a no-op
+    capsys.readouterr()
+    assert queue(repo, tmp_path, "configs/a_dfd.yaml", extra=("--worker", "vinh-acc2")) == 0
+    assert "already done" in capsys.readouterr().out
+    assert queue(repo, tmp_path, "configs/*.yaml", extra=("--rescore", str(rescue))) == 0
+    assert len(drive_runs(tmp_path)) == 1 and len((repo / "calls.log").read_text().splitlines()) == 1
+
+
+def test_rescore_refuses_runs_it_cannot_attribute(repo, tmp_path, capsys):
+    assert queue(repo, tmp_path, "configs/a_dfd.yaml") == 0
+    (local,) = (repo / "results" / "runs").iterdir()
+    rescue = tmp_path / "rescue"
+    shutil.copytree(local, rescue / "other_commit")
+    meta = json.loads((rescue / "other_commit" / "metadata.json").read_text(encoding="utf-8"))
+    (rescue / "other_commit" / "metadata.json").write_text(json.dumps({**meta, "commit_hash": "f" * 40}), encoding="utf-8")
+    shutil.copytree(local, rescue / "unknown_config")
+    (rescue / "unknown_config" / "resolved.yaml").write_text(yaml.safe_dump({"variant": "ti_kd", "seed": 1}), encoding="utf-8")
+    shutil.copytree(local, rescue / "interrupted")
+    (rescue / "interrupted" / "metadata.json").write_text(json.dumps({**meta, "status": "interrupted"}), encoding="utf-8")
+    shutil.rmtree(tmp_path / "drive")
+    capsys.readouterr()
+    assert queue(repo, tmp_path, "configs/*.yaml", extra=("--rescore", str(rescue))) == 1
+    out = capsys.readouterr().out
+    assert "skipped: trained at ffffffffffff" in out and "skipped: matches 0 queue configs" in out
+    assert "status is 'interrupted'" in out
+    assert not drive_runs(tmp_path)
