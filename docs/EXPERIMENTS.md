@@ -279,3 +279,8 @@ Như vậy chênh lệch word acc so với full DFD **đúng bằng** số crop 
 | `teacher/` | Gói teacher của Tuấn (hoặc teacher train lại) |
 | `runs/<run_id>/` | Thư mục kết quả, mỗi run một thư mục |
 | `Vi-DFD_theo_doi_run` | Sheet theo dõi (upload file `.xlsx`, mở bằng Google Sheets) |
+
+
+## Bàn giao kết quả KD tuning của Tuấn (20/11/2026)
+
+Đã hoàn tất và kiểm tra 12/12 trial KD thường trên `exp-v1`; xem [bảng kết quả và trạng thái artifact](RESULTS_E2_KD_TUNING.md). Chưa khóa siêu tham số hoặc tạo `exp-v2`. Upload Drive chưa được xác nhận.
