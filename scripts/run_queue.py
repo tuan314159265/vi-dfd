@@ -308,6 +308,15 @@ def check_trained(run_dir: Path, smoke: bool) -> Path | None:
     return best[0]
 
 
+def data_args(data_root: Path) -> list[str]:
+    """eval.py reads data.root from the run's resolved.yaml, i.e. the machine it was TRAINED on (a run trained
+    elsewhere, e.g. /content/vintext_notebook, has no LMDB there). Point it at this machine's checked copy."""
+    lmdb = data_root / "lmdb" if (data_root / "lmdb").is_dir() else data_root
+    found = ["--data-root", str(lmdb)]
+    subsets = data_root / "splits" / "subsets"
+    return found + (["--subset-dir", str(subsets)] if subsets.is_dir() else [])
+
+
 def check_scored(run_dir: Path, splits: list[str]) -> dict:
     """validation / test / ... -> word accuracy on subset all, from metrics.csv. Fails if a split is missing."""
     import csv
@@ -389,7 +398,7 @@ def train_and_upload(config_path: Path, config: dict, relative: str, key: dict, 
             eval_log = args.log_dir / (config_path.stem + ".eval.log")
             started = time.time()
             code, _ = stream([sys.executable, "eval.py", "--run-dir", str(run_dir), "--checkpoint", str(best),
-                              "--device", args.device], repo, env, eval_log)
+                              "--device", args.device, *data_args(args.data_root)], repo, env, eval_log)
             eval_seconds = time.time() - started
             shutil.copy2(eval_log, run_dir / "eval_log.txt")
             if code != 0:
@@ -461,7 +470,7 @@ def rescore_one(source: Path, candidates: list, args, checkout: dict, env: dict)
         eval_log = args.log_dir / f"{source.name}.rescore.log"
         started = time.time()
         code, _ = stream([sys.executable, "eval.py", "--run-dir", str(run_dir), "--checkpoint", str(best),
-                          "--device", args.device], args.repo, env, eval_log)
+                          "--device", args.device, *data_args(args.data_root)], args.repo, env, eval_log)
         eval_seconds = time.time() - started
         shutil.copy2(eval_log, run_dir / "eval_log.txt")
         if code != 0:

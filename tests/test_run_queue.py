@@ -49,7 +49,9 @@ FAKE_EVAL = textwrap.dedent('''
     from pathlib import Path
     p = argparse.ArgumentParser()
     p.add_argument("--run-dir"); p.add_argument("--checkpoint"); p.add_argument("--device")
+    p.add_argument("--data-root"); p.add_argument("--subset-dir")
     a = p.parse_args()
+    Path("eval_calls.log").open("a").write(str(a.data_root) + "\\n")
     if os.environ.get("FAKE_EVAL_FAIL"):
         raise SystemExit("ImportError: cannot import name 'DistilledPARSeq'")
     run = Path(a.run_dir)
@@ -75,7 +77,7 @@ def repo(tmp_path):
     repo.mkdir()
     (repo / "train.py").write_text(FAKE_TRAIN, encoding="utf-8")
     (repo / "eval.py").write_text(FAKE_EVAL, encoding="utf-8")
-    (repo / ".gitignore").write_text("results/\ncalls.log\n__pycache__/\n", encoding="utf-8")
+    (repo / ".gitignore").write_text("results/\ncalls.log\neval_calls.log\n__pycache__/\n", encoding="utf-8")
     make_config(repo, "a_dfd")
     make_config(repo, "b_ce", variant="ti_ce", kd=False)
     git = ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.com"]
@@ -369,3 +371,10 @@ def test_rescore_refuses_runs_it_cannot_attribute(repo, tmp_path, capsys):
     assert "skipped: trained at ffffffffffff" in out and "skipped: matches 0 queue configs" in out
     assert "status is 'interrupted'" in out and "trained 1 of 3 epochs" in out
     assert not drive_runs(tmp_path)
+
+
+def test_eval_uses_this_machines_data_not_the_training_path(repo, tmp_path):
+    """Runs trained on another VM keep their data.root (19/11: /content/vintext_notebook); eval.py must not use it."""
+    (tmp_path / "lmdb").mkdir()
+    assert queue(repo, tmp_path, "configs/a_dfd.yaml") == 0
+    assert (repo / "eval_calls.log").read_text().splitlines() == [str(tmp_path / "lmdb")]
