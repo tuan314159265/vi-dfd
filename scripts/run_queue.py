@@ -21,8 +21,9 @@ config twice. Before step 2 a worker claims the config by writing <drive-runs>/_
     accounts), re-reads the folder, and keeps the config only if its claim is the oldest live one;
   - while training, a thread rewrites the claim every --heartbeat-seconds. A tab that dies stops beating, so after
     --stale-minutes another worker takes the config over (and reruns it from scratch);
-  - a failed run leaves a claim with status "failed" that blocks other workers (so a broken config is not retried by
-    every tab) until it is deleted or a worker passes --retry-failed. A finished or interrupted run removes its claim.
+  - a failed run leaves a claim with status "failed" that blocks every worker, the one that failed included (so a
+    broken config is not retried by every tab, and a run whose eval failed is rescored instead of trained twice)
+    until it is deleted or a worker passes --retry-failed. A finished or interrupted run removes its claim.
 Each worker only writes and deletes its own file, because one Drive folder can hold two files with the same name.
 Drive sync between accounts is not atomic, so this is a best-effort lock: a duplicate is still possible if two tabs
 claim one config within the settle window; `e2_tuning.py lock` and summarize_results.py refuse two runs of one cell
@@ -250,9 +251,11 @@ def acquire(drive_runs: Path, key: dict, args) -> tuple[Claim | None, str]:
     """Claim the config for this worker, or return why not (another worker holds it, or it is already done)."""
     folder = claim_folder(drive_runs, key)
     stale = args.stale_minutes * 60
-    others = [c for c in read_claims(folder, stale) if c["live"] and c.get("worker") != args.worker]
-    running = [c for c in others if c.get("status") != "failed"]
-    failed = [c for c in others if c.get("status") == "failed"]
+    claims = [c for c in read_claims(folder, stale) if c["live"]]
+    running = [c for c in claims if c.get("status") != "failed" and c.get("worker") != args.worker]
+    # this worker's own failed claim blocks too: otherwise a tab retrains every config it failed (19/11: eval.py
+    # failed after training, the tab trained tau2_lam1_wt1 a second time while the first run sat in runs_rescue)
+    failed = [c for c in claims if c.get("status") == "failed"]
     if running:
         return None, f"busy: claimed by {running[0].get('worker')}"
     if failed and not args.retry_failed:
@@ -277,6 +280,16 @@ def acquire(drive_runs: Path, key: dict, args) -> tuple[Claim | None, str]:
     return claim, ""
 
 
+def last_validated_epoch(run_dir: Path) -> int:
+    """The last epoch train.py validated (validation.csv numbers epochs from 1); 0 without the file."""
+    import csv
+    path = run_dir / "validation.csv"
+    if not path.exists():
+        return 0
+    with path.open(encoding="utf-8", newline="") as handle:
+        return max((int(row["epoch"]) for row in csv.DictReader(handle) if row.get("epoch")), default=0)
+
+
 def check_trained(run_dir: Path, smoke: bool) -> Path | None:
     """The best checkpoint of a run that finished training (None for a smoke test: it saves no checkpoint)."""
     meta = json.loads((run_dir / "metadata.json").read_text(encoding="utf-8"))
@@ -286,6 +299,10 @@ def check_trained(run_dir: Path, smoke: bool) -> Path | None:
     best = sorted((run_dir / "checkpoints").glob("best-*.ckpt"))
     if smoke:
         return best[0] if len(best) == 1 else None
+    last = last_validated_epoch(run_dir)
+    epochs = (yaml.safe_load((run_dir / "resolved.yaml").read_text(encoding="utf-8")).get("training") or {}).get("epochs")
+    if epochs and last < int(epochs):  # a run stopped early can still say "completed" (19/11: 5.7 of 20 epochs)
+        raise RuntimeError(f"trained {last} of {epochs} epochs (validation.csv) although its status is 'completed'")
     if len(best) != 1:
         raise RuntimeError(f"expected exactly one best-*.ckpt in {run_dir / 'checkpoints'}, found {[p.name for p in best]}")
     return best[0]

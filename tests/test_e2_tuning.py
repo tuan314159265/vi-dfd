@@ -182,6 +182,20 @@ def test_select_ignores_smoke_and_unfinished_runs(policy, tmp_path):
     assert e2_tuning.select(policy, runs)["ti_dfd"]["run_id"] == "good"
 
 
+def test_select_ignores_completed_runs_that_stopped_early(policy, tmp_path, capsys):
+    """19/11: a Colab run said "completed" after 5.7 of 20 epochs; it must not fill its grid cell."""
+    runs = tmp_path / "runs"
+    for name, last in (("full", 20), ("short", 5)):
+        write_run(runs, name, "ti_dfd", 2.0, 1.0, 2.0 if name == "full" else 1.0, 0.80 if name == "full" else 0.99)
+        resolved = runs / name / "resolved.yaml"
+        resolved.write_text(yaml.safe_dump({**yaml.safe_load(resolved.read_text(encoding="utf-8")),
+                                            "training": {"epochs": 20}}), encoding="utf-8")
+        (runs / name / "validation.csv").write_text("epoch,word_acc\n" + "".join(f"{e},0.8\n" for e in range(1, last + 1)),
+                                                    encoding="utf-8")
+    assert e2_tuning.select(policy, runs)["ti_dfd"]["run_id"] == "full"
+    assert "Skipping short: trained 5 of 20 epochs" in capsys.readouterr().out
+
+
 def test_lock_refuses_duplicate_trials_until_excluded(policy, locked_setup):
     runs, configs, out = locked_setup
     shutil.copytree(runs / "dfd_ti_dfd_tau1_lam0.5_wt1", runs / "dfd_rerun")
