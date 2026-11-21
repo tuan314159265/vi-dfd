@@ -130,8 +130,10 @@ def short_training(folder: Path, config: dict):
     """
     epochs = (config.get("training") or {}).get("epochs")
     path = folder / "validation.csv"
-    if not epochs or not path.exists():
-        return None
+    if not epochs:
+        return "training.epochs is missing, cannot confirm training completion"
+    if not path.is_file():
+        return f"validation.csv is missing, cannot confirm it trained {epochs} epochs"
     with path.open(encoding="utf-8", newline="") as handle:
         last = max((int(row["epoch"]) for row in csv.DictReader(handle) if row.get("epoch")), default=0)
     if last < int(epochs):

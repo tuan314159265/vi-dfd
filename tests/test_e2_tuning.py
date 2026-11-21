@@ -64,6 +64,20 @@ def write_run(runs, name, variant, tau, lam, wt, word_acc, ned=0.9, split="valid
         writer.writeheader()
         writer.writerow({"commit_hash": "a" * 40, "split": split, "subset": "all", "word_acc": word_acc, "ned_score": ned})
         writer.writerow({"commit_hash": "a" * 40, "split": "test", "subset": "all", "word_acc": 0.99, "ned_score": 0.99})
+    # PR4_FIX_COMPLETE_VALIDATION_FIXTURE
+    # A normal synthetic completed run must include epoch evidence.
+    run_dir = runs / name
+    resolved = run_dir / "resolved.yaml"
+    config = yaml.safe_load(resolved.read_text(encoding="utf-8"))
+    config.setdefault("training", {})["epochs"] = 20
+    resolved.write_text(yaml.safe_dump(config), encoding="utf-8")
+
+    (run_dir / "validation.csv").write_text(
+        "epoch,word_acc\n".replace("\\n", "\n")
+        + "".join(f"{epoch},0.8\n" for epoch in range(1, 21)),
+        encoding="utf-8",
+    )
+
 
 
 def test_select_uses_validation_and_breaks_ties(policy, tmp_path):
@@ -194,6 +208,29 @@ def test_select_ignores_completed_runs_that_stopped_early(policy, tmp_path, caps
                                                     encoding="utf-8")
     assert e2_tuning.select(policy, runs)["ti_dfd"]["run_id"] == "full"
     assert "Skipping short: trained 5 of 20 epochs" in capsys.readouterr().out
+
+
+def test_select_ignores_completed_runs_missing_validation_csv(policy, tmp_path, capsys):
+    """A completed run without epoch history must not fill a tuning grid cell."""
+    runs = tmp_path / "runs"
+    for name, score in (("full", 0.80), ("missing", 0.99)):
+        write_run(runs, name, "ti_dfd", 2.0, 1.0, 2.0 if name == "full" else 1.0, score)
+        resolved = runs / name / "resolved.yaml"
+        config = yaml.safe_load(resolved.read_text(encoding="utf-8"))
+        config["training"] = {"epochs": 20}
+        resolved.write_text(yaml.safe_dump(config), encoding="utf-8")
+        if name == "full":
+            (runs / name / "validation.csv").write_text(
+                "epoch,word_acc\n" + "".join(f"{epoch},0.8\n" for epoch in range(1, 21)),
+                encoding="utf-8",
+            )
+        else:
+            (runs / name / "validation.csv").unlink(missing_ok=True)
+            reason = e2_tuning.run_problem(runs / name, config)
+            assert "validation.csv is missing" in reason
+
+    assert e2_tuning.select(policy, runs)["ti_dfd"]["run_id"] == "full"
+    assert "Skipping missing: validation.csv is missing" in capsys.readouterr().out
 
 
 def test_lock_refuses_duplicate_trials_until_excluded(policy, locked_setup):
