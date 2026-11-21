@@ -34,6 +34,7 @@ def make_run(runs, name, *, experiment="E2", stage="train", variant, seed, acc, 
     folder.mkdir(parents=True)
     config = {"experiment": experiment, "stage": stage, "variant": variant, "seed": seed,
               "distillation": kd_section(variant, tau, lam, wt), "composition": {"validity_mask": validity}}
+    config["training"] = {"epochs": 20}
     (folder / "resolved.yaml").write_text(yaml.safe_dump(config), encoding="utf-8")
     status = "prepared" if variant == "no_validity_mask" else "completed"
     (folder / "metadata.json").write_text(json.dumps({"run_id": name, "commit_hash": commit, "status": status}), encoding="utf-8")
@@ -51,6 +52,13 @@ def make_run(runs, name, *, experiment="E2", stage="train", variant, seed, acc, 
         for split, subset, value, tone_er in rows:
             writer.writerow({"run_id": name, "commit_hash": commit, "seed": seed, "split": split, "subset": subset, "precision": "fp32",
                              "num_words": 100, "word_acc": value, "ned_score": 0.9, "base_er": 0.03, "modifier_er": 0.02, "tone_er": tone_er})
+    # PR4_SYNTHETIC_VALIDATION_HISTORY
+    if status == "completed":
+        (folder / "validation.csv").write_text(
+            "epoch,word_acc\n"
+            + "".join(f"{epoch},0.8\n" for epoch in range(1, 21)),
+            encoding="utf-8",
+        )
     return folder
 
 

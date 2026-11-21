@@ -37,7 +37,7 @@ training:
 distillation:
   enabled: true
   mode: marginal
-  temperature: 2.0
+  temperature: 1.0
   lambda: 1.0
   component_weights:
     base: 1.0

@@ -78,6 +78,12 @@ def parse_args(argv=None):
 
 def main(argv=None) -> int:
     args = parse_args(argv)
+    if args.checkpoint:
+        # train.py gets strhub on sys.path through dfd.teacher; eval.py must do it itself, before
+        # dfd.parseq_kd is first imported, or DistilledPARSeq stays None (every Colab eval failed on 19/11).
+        from dfd.parseq import activate_upstream
+
+        activate_upstream()
     from dfd import evaluation  # imported late so --help works without optional deps
 
     try:
