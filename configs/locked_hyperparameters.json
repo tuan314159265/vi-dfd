@@ -1,0 +1,47 @@
+{
+  "note": "Written by scripts/e2_tuning.py lock; scripts/summarize_results.py checks every main run against it.",
+  "selection_split": "validation",
+  "tuning_commit": "97604d777c509381eb4118564368b18a8504d4d6",
+  "tuning_runs": [
+    "20261117T194943Z_ti_kd_s42_84e95e78",
+    "20261119T132936Z_ti_dfd_s42_d2907d81",
+    "20261119T135316Z_ti_dfd_s42_e9f45665",
+    "20261119T135502Z_ti_dfd_s42_df57e35d",
+    "20261119T135642Z_ti_dfd_s42_18f1c41d",
+    "20261119T141733Z_ti_dfd_s42_6ddea583",
+    "20261119T141811Z_ti_dfd_s42_a57019eb",
+    "20261119T143750Z_ti_dfd_s42_18c74226",
+    "20261119T143950Z_ti_dfd_s42_617dd01e",
+    "20261119T144305Z_ti_dfd_s42_00966839",
+    "20261119T150356Z_ti_dfd_s42_f20b76ca",
+    "20261119T150523Z_ti_dfd_s42_b7bdb396",
+    "20261120T023950Z_ti_dfd_s42_c58dc25d",
+    "20261120T093402Z_ti_kd_s42_65165ca8",
+    "20261120T100917Z_ti_kd_s42_2d6d295b",
+    "20261120T103614Z_ti_kd_s42_fce6603e",
+    "20261120T110004Z_ti_kd_s42_60c10092",
+    "20261120T112406Z_ti_kd_s42_6d981171",
+    "20261120T120100Z_ti_kd_s42_10d88ef9",
+    "20261120T122302Z_ti_kd_s42_99f03520",
+    "20261120T124126Z_ti_kd_s42_627a9d74",
+    "20261120T125912Z_ti_kd_s42_6e805b1d",
+    "20261120T131650Z_ti_kd_s42_98cb7d00",
+    "20261120T135447Z_ti_kd_s42_4f8bd0a4"
+  ],
+  "excluded_runs": [],
+  "dfd": {
+    "temperature": 1.0,
+    "lambda": 1.0,
+    "tone_weight": 2.0,
+    "run_id": "20261119T135316Z_ti_dfd_s42_e9f45665",
+    "word_acc": 0.877543,
+    "ned_score": 0.943251
+  },
+  "kd": {
+    "temperature": 2.0,
+    "lambda": 1.0,
+    "run_id": "20261117T194943Z_ti_kd_s42_84e95e78",
+    "word_acc": 0.878341,
+    "ned_score": 0.943053
+  }
+}

@@ -279,3 +279,16 @@ Như vậy chênh lệch word acc so với full DFD **đúng bằng** số crop 
 | `teacher/` | Gói teacher của Tuấn (hoặc teacher train lại) |
 | `runs/<run_id>/` | Thư mục kết quả, mỗi run một thư mục |
 | `Vi-DFD_theo_doi_run` | Sheet theo dõi (upload file `.xlsx`, mở bằng Google Sheets) |
+
+**9. Siêu tham số đã khóa (21/11).** `python scripts/e2_tuning.py lock` trên đủ 24 trial (12 DFD, 12 KD thường), cùng commit `exp-v1` (97604d7), mọi run đủ 20 epoch, không loại run nào. Kết quả ghi trong `configs/locked_hyperparameters.json`.
+
+| Biến thể | τ | λ | w_t | Run | Word acc val | 1-NED val | Hạng 2 |
+|---|---|---|---|---|---|---|---|
+| `ti_dfd` | 1 | 1 | 2 | `e9f45665` | 0,8775 | 0,9433 | τ2 λ0,5 w_t1: 0,8767 |
+| `ti_kd` | 2 | 1 | — | `84e95e78` | 0,8783 | 0,9431 | τ1 λ2: 0,8779 |
+
+- Chỉ τ của DFD đổi (2 → 1) trong 26 config; λ, w_t của DFD và τ, λ của KD thường trùng giá trị mặc định cũ.
+- Khoảng cách hạng 1 với hạng 2 rất nhỏ: 2 từ (DFD) và 1 từ (KD) trên 2.507 từ validation, nhỏ hơn dao động giữa các seed. Báo cáo phải nói lựa chọn này gần như hòa, theo đúng quy tắc chọn đã chốt trước.
+- τ = 4 kém rõ ở DFD (0,848–0,870), còn KD thường gần như không nhạy với τ, λ (0,8751–0,8783).
+- α_i tính trên phân phối tone của teacher đã làm mềm bởi τ (proposal 06), nên chọn τ = 1 cũng là chọn trọng số tone-confidence mạnh nhất. Ablation `temperature_sweep` và `no_tone_weight` không độc lập với nhau; ghi trong phần Method và Limitations.
+- Run KD `84e95e78` train ngày 17/11 (trước khi Tuấn xác nhận dữ liệu 18/11), nhưng `data_identity.json` trùng hoàn toàn với các run DFD (SHA-256 LMDB train/val, teacher), nên được tính.
