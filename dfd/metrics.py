@@ -1,391 +1,188 @@
-"""Recognition metric interfaces (implementation pending).
+"""Shared Vietnamese STR evaluation metrics.
 
-NFC-normalized, diacritic-sensitive and case-insensitive main scoring.
-Report word accuracy (full and diacritic-heavy), 1-NED, aligned component ER,
-insertions/deletions separately, and a tone confusion matrix. Freeze alignment
-tie-breaking, denominators and heavy-word definitions before experiments.
+Protocol (experiment plan, decision 4, 16 Nov 2026):
+- NFC, remove ASCII spaces, lowercase (retain Vietnamese diacritics).
+- Word accuracy and 1-NED score *every* crop; U+FFFD always makes it wrong.
+- Levenshtein.opcodes(ground_truth, prediction) for alignment.
+- Base/modifier/tone errors count only component mismatches in REPLACE pairs.
+- Insertions and deletions are reported separately, never folded into component ER.
+- Micro denominator is number of normalized ground-truth characters in the split.
+- '|' is valid vocabulary punctuation; U+FFFD is the invalid marker.
+
+An empty corpus, or a corpus with zero ground-truth characters for component
+rates, has no meaningful component-ER denominator and raises ValueError.
 """
+
 import unicodedata
+
 from rapidfuzz.distance import Levenshtein
-from dfd.vietchar import decompose
-from dfd.vietchar import TONES
+from dfd.vietchar import TONES, decompose
 
-
-def evaluate_predictions(predictions, labels, vocabulary):
-    raise NotImplementedError("Implement shared Levenshtein alignment and component metrics before baseline training")
-
-
-INVALID_CHARACTER = "|"
+INVALID_CHARACTER = "\ufffd"
 
 
 def normalize_text(text: str) -> str:
-    """
-    Normalize Vietnamese text before evaluation.
-
-    - Unicode NFC
-    - Remove ASCII spaces
-    - Preserve Vietnamese diacritics
-    """
+    """NFC + ignore ASCII spaces + lowercase, preserving diacritics."""
     if not isinstance(text, str):
         raise TypeError("Expected a string")
-
-    text = unicodedata.normalize("NFC", text)
-
-    return text.replace(" ", "")
+    return unicodedata.normalize("NFC", text).replace(" ", "").lower()
 
 
 def contains_invalid_character(text: str) -> bool:
-    """Check whether a transcript contains the invalid marker."""
+    """True only for the U+FFFD invalid-decoding sentinel."""
     return INVALID_CHARACTER in text
 
 
-
-def word_accuracy(
-    predictions: list[str],
-    ground_truths: list[str],
-) -> float:
-    """
-    Compute word-level accuracy.
-
-    Rules:
-    - Normalize Unicode NFC.
-    - Remove ASCII spaces.
-    - Any pair containing '|' is considered incorrect.
-    - Return a value between 0.0 and 1.0.
-    """
-
+def _validate_pairs(predictions: list[str], ground_truths: list[str]) -> None:
     if len(predictions) != len(ground_truths):
-        raise ValueError(
-            "Predictions and ground truths must have the same length"
-        )
-
+        raise ValueError("Predictions and ground truths must have the same length")
     if not ground_truths:
         raise ValueError("Cannot evaluate an empty dataset")
 
+
+def word_accuracy(predictions: list[str], ground_truths: list[str]) -> float:
+    """Fraction of exactly correct normalized words; U+FFFD is always wrong."""
+    _validate_pairs(predictions, ground_truths)
     correct = 0
-
     for pred, gt in zip(predictions, ground_truths):
-        pred = normalize_text(pred)
-        gt = normalize_text(gt)
-
-        # Invalid marker: always count as incorrect
-        if (
-            contains_invalid_character(pred)
-            or contains_invalid_character(gt)
-        ):
-            continue
-
-        if pred == gt:
+        pred, gt = normalize_text(pred), normalize_text(gt)
+        if not (contains_invalid_character(pred) or contains_invalid_character(gt)) and pred == gt:
             correct += 1
-
     return correct / len(ground_truths)
 
 
-
-def normalized_edit_similarity(
-    prediction: str,
-    ground_truth: str,
-) -> float:
-    """
-    Compute 1-NED for a single prediction/ground-truth pair.
-
-    Returns a value between 0.0 and 1.0.
-    """
-
-    pred = normalize_text(prediction)
-    gt = normalize_text(ground_truth)
-
-    # Invalid marker: treat the sample as incorrect.
-    if (
-        contains_invalid_character(pred)
-        or contains_invalid_character(gt)
-    ):
+def normalized_edit_similarity(prediction: str, ground_truth: str) -> float:
+    """Normalized Levenshtein similarity for one word (1-NED)."""
+    pred, gt = normalize_text(prediction), normalize_text(ground_truth)
+    if contains_invalid_character(pred) or contains_invalid_character(gt):
         return 0.0
-
-    # Two empty strings are considered identical.
-    if not pred and not gt:
-        return 1.0
-
-    edit_distance = Levenshtein.distance(pred, gt)
-
     max_length = max(len(pred), len(gt))
-
-    similarity = 1.0 - edit_distance / max_length
-
-    return similarity
+    return 1.0 if max_length == 0 else 1 - Levenshtein.distance(gt, pred) / max_length
 
 
-def one_minus_ned(
-    predictions: list[str],
-    ground_truths: list[str],
-) -> float:
-    """
-    Compute dataset-level 1-NED.
-
-    Each word crop contributes equally.
-    """
-
-    if len(predictions) != len(ground_truths):
-        raise ValueError(
-            "Predictions and ground truths must have the same length"
-        )
-
-    if not ground_truths:
-        raise ValueError("Cannot evaluate an empty dataset")
-
-    total_similarity = 0.0
-
-    for pred, gt in zip(predictions, ground_truths):
-        total_similarity += normalized_edit_similarity(pred, gt)
-
-    return total_similarity / len(ground_truths)
-
+def one_minus_ned(predictions: list[str], ground_truths: list[str]) -> float:
+    """Word-macro average of normalized Levenshtein similarity."""
+    _validate_pairs(predictions, ground_truths)
+    return sum(normalized_edit_similarity(p, g) for p, g in zip(predictions, ground_truths)) / len(ground_truths)
 
 
 def levenshtein_alignment(
-    prediction: str,
-    ground_truth: str,
+    prediction: str, ground_truth: str
 ) -> list[tuple[str, str | None, str | None]]:
+    """Alignment GT -> prediction, as (op, gt_char, pred_char).
+
+    'insert' means extra character in prediction; 'delete' means missing
+    character in prediction. U+FFFD is intentionally allowed in the alignment.
     """
-    Align characters between ground truth and prediction.
-
-    Returns:
-        List of (operation, gt_char, pred_char)
-
-    Operations:
-        equal   : characters match
-        replace : characters differ
-        insert  : extra character in prediction
-        delete  : missing character in prediction
-    """
-
-    pred = normalize_text(prediction)
-    gt = normalize_text(ground_truth)
-
-    if (
-        contains_invalid_character(pred)
-        or contains_invalid_character(gt)
-    ):
-        raise ValueError(
-            "Cannot align transcripts containing invalid marker '|'"
-        )
-
-    operations = Levenshtein.opcodes(gt, pred)
-
+    pred, gt = normalize_text(prediction), normalize_text(ground_truth)
     alignment = []
-
-    for op, gt_start, gt_end, pred_start, pred_end in operations:
-
+    for op, gt_start, gt_end, pred_start, pred_end in Levenshtein.opcodes(gt, pred):
         if op in ("equal", "replace"):
-            for gt_char, pred_char in zip(
-                gt[gt_start:gt_end],
-                pred[pred_start:pred_end],
-            ):
-                alignment.append((op, gt_char, pred_char))
-
+            gt_chunk, pred_chunk = gt[gt_start:gt_end], pred[pred_start:pred_end]
+            if len(gt_chunk) != len(pred_chunk):
+                raise RuntimeError("Unexpected unequal opcode span")
+            alignment.extend((op, a, b) for a, b in zip(gt_chunk, pred_chunk))
         elif op == "insert":
-            for pred_char in pred[pred_start:pred_end]:
-                alignment.append(("insert", None, pred_char))
-
+            alignment.extend(("insert", None, c) for c in pred[pred_start:pred_end])
         elif op == "delete":
-            for gt_char in gt[gt_start:gt_end]:
-                alignment.append(("delete", gt_char, None))
-
+            alignment.extend(("delete", c, None) for c in gt[gt_start:gt_end])
+        else:
+            raise RuntimeError(f"Unknown Levenshtein opcode: {op}")
     return alignment
 
 
+def _replacement_error_flags(gt_char: str, pred_char: str) -> tuple[int, int, int]:
+    """Compare components, with any U+FFFD position counting as 3 errors."""
+    if INVALID_CHARACTER in (gt_char, pred_char):
+        return (1, 1, 1)
+    gt_parts, pred_parts = decompose(gt_char), decompose(pred_char)
+    return (
+        int(gt_parts.base != pred_parts.base),
+        int(gt_parts.modifier != pred_parts.modifier),
+        int(gt_parts.tone != pred_parts.tone),
+    )
 
-def component_error_counts(
-    prediction: str,
-    ground_truth: str,
-) -> dict[str, int]:
-    """
-    Count Base, Modifier and Tone errors for one word crop.
-    
-    Operation	Base Error	Modifier Error	Tone Error
-    Equal	    0	        0	            0
-    Replace	    Compare     Compare         compare
-    Insert	    1	        1	            1
-    Delete	    1	        1	            1
-    """
 
-    pred = normalize_text(prediction)
+def component_error_counts(prediction: str, ground_truth: str) -> dict[str, int]:
+    """Count per-word substitution component errors, insertions and deletions.
+
+    'total' means the normalized GT length, NOT max(pred_len, gt_len).
+    A U+FFFD at an aligned position is penalized in all 3 components, including
+    when both sides are U+FFFD. Insert/delete remain separate.
+    """
     gt = normalize_text(ground_truth)
-
-    # Number of aligned character positions used as denominator
-    total = max(len(pred), len(gt), 1)
-
-    # Team policy: a crop containing | is always incorrect.
-    if (
-        contains_invalid_character(pred)
-        or contains_invalid_character(gt)
-    ):
-        return {
-            "base_errors": total,
-            "modifier_errors": total,
-            "tone_errors": total,
-            "total": total,
-        }
-
-    alignment = levenshtein_alignment(pred, gt)
-
-    base_errors = 0
-    modifier_errors = 0
-    tone_errors = 0
-
-    for operation, gt_char, pred_char in alignment:
-
-        if operation == "equal":
-            continue
-
-        if operation in ("insert", "delete"):
-            base_errors += 1
-            modifier_errors += 1
-            tone_errors += 1
-            continue
-
-        # operation == "replace"
-        gt_parts = decompose(gt_char)
-        pred_parts = decompose(pred_char)
-
-        if gt_parts.base != pred_parts.base:
-            base_errors += 1
-
-        if gt_parts.modifier != pred_parts.modifier:
-            modifier_errors += 1
-
-        if gt_parts.tone != pred_parts.tone:
-            tone_errors += 1
-
-    return {
-        "base_errors": base_errors,
-        "modifier_errors": modifier_errors,
-        "tone_errors": tone_errors,
-        "total": total,
-    }
+    counts = dict(base_errors=0, modifier_errors=0, tone_errors=0,
+                  insertions=0, deletions=0, total=len(gt))
+    for op, gt_char, pred_char in levenshtein_alignment(prediction, ground_truth):
+        if op == "insert":
+            counts["insertions"] += 1
+        elif op == "delete":
+            counts["deletions"] += 1
+        elif op == "equal":
+            if gt_char == INVALID_CHARACTER:
+                counts["base_errors"] += 1
+                counts["modifier_errors"] += 1
+                counts["tone_errors"] += 1
+        elif op == "replace":
+            b, m, t = _replacement_error_flags(gt_char, pred_char)
+            counts["base_errors"] += b
+            counts["modifier_errors"] += m
+            counts["tone_errors"] += t
+    return counts
 
 
-
-def component_error_rates(
-    predictions: list[str],
-    ground_truths: list[str],
-) -> dict[str, float]:
-    """
-    Compute dataset-level Base, Modifier and Tone Error Rates.
-    """
-
-    if len(predictions) != len(ground_truths):
-        raise ValueError(
-            "Predictions and ground truths must have the same length"
-        )
-
-    if not ground_truths:
-        raise ValueError("Cannot evaluate an empty dataset")
-
-    total_base_errors = 0
-    total_modifier_errors = 0
-    total_tone_errors = 0
-    total_positions = 0
-
+def component_error_rates(predictions: list[str], ground_truths: list[str]) -> dict[str, float]:
+    """Micro averaged ER; denominator = total normalized GT characters."""
+    _validate_pairs(predictions, ground_truths)
+    totals = {k: 0 for k in ("base_errors", "modifier_errors", "tone_errors", "insertions", "deletions", "total")}
     for pred, gt in zip(predictions, ground_truths):
-
         counts = component_error_counts(pred, gt)
-
-        total_base_errors += counts["base_errors"]
-        total_modifier_errors += counts["modifier_errors"]
-        total_tone_errors += counts["tone_errors"]
-        total_positions += counts["total"]
-
+        for key in totals:
+            totals[key] += counts[key]
+    denominator = totals["total"]
+    if denominator == 0:
+        raise ValueError("Component ER undefined when ground truths contain zero characters")
     return {
-        "base_er": total_base_errors / total_positions,
-        "modifier_er": total_modifier_errors / total_positions,
-        "tone_er": total_tone_errors / total_positions,
+        "base_er": totals["base_errors"] / denominator,
+        "modifier_er": totals["modifier_errors"] / denominator,
+        "tone_er": totals["tone_errors"] / denominator,
+        "insertion_rate": totals["insertions"] / denominator,
+        "deletion_rate": totals["deletions"] / denominator,
     }
-
 
 
 def tone_confusion_matrix(
-    predictions: list[str],
-    ground_truths: list[str],
+    predictions: list[str], ground_truths: list[str]
 ) -> dict[str, dict[str, int]]:
+    """6x6 counts: rows GT tone, columns predicted tone.
+
+    Counts aligned, decomposable pairs with equal base and modifier. Excludes
+    insertion/deletion and U+FFFD positions; does not discard an entire crop.
     """
-    Build a 6x6 tone confusion matrix.
-
-    Rows: Ground Truth tone
-    Columns: Prediction tone
-
-    Only compare aligned characters with
-    matching Base and Modifier.
-    """
-
-    if len(predictions) != len(ground_truths):
-        raise ValueError(
-            "Predictions and ground truths must have the same length"
-        )
-
-    if not ground_truths:
-        raise ValueError("Cannot evaluate an empty dataset")
-
-    matrix = {
-        gt_tone: {
-            pred_tone: 0
-            for pred_tone in TONES
-        }
-        for gt_tone in TONES
-    }
-
+    _validate_pairs(predictions, ground_truths)
+    matrix = {gt: {pred: 0 for pred in TONES} for gt in TONES}
     for pred, gt in zip(predictions, ground_truths):
-        pred = normalize_text(pred)
-        gt = normalize_text(gt)
-
-        # Skip invalid crops
-        if (
-            contains_invalid_character(pred)
-            or contains_invalid_character(gt)
-        ):
-            continue
-
-        alignment = levenshtein_alignment(pred, gt)
-
-        for operation, gt_char, pred_char in alignment:
-
-            if operation in ("insert", "delete"):
+        for op, gt_char, pred_char in levenshtein_alignment(pred, gt):
+            if op in ("insert", "delete") or INVALID_CHARACTER in (gt_char, pred_char):
                 continue
-
-            gt_parts = decompose(gt_char)
-            pred_parts = decompose(pred_char)
-
-            # Analyze tone independently of Base/Modifier
-            if (
-                gt_parts.base != pred_parts.base
-                or gt_parts.modifier != pred_parts.modifier
-            ):
-                continue
-
-            matrix[gt_parts.tone][pred_parts.tone] += 1
-
+            gt_parts, pred_parts = decompose(gt_char), decompose(pred_char)
+            if gt_parts.base == pred_parts.base and gt_parts.modifier == pred_parts.modifier:
+                matrix[gt_parts.tone][pred_parts.tone] += 1
     return matrix
 
 
 def evaluate_predictions(
-    predictions: list[str],
-    ground_truths: list[str],
+    predictions: list[str], ground_truths: list[str], vocabulary=None
 ) -> dict:
-    """
-    Evaluate STR predictions using all implemented metrics.
-    """
+    """All shared metrics for pre-decoded text.
 
+    Optional ``vocabulary`` is accepted for compatibility with an earlier
+    3-argument placeholder; it is not used to transform already-decoded text.
+    """
+    _validate_pairs(predictions, ground_truths)
     return {
-        "word_accuracy": word_accuracy(
-            predictions, ground_truths
-        ),
-        "one_minus_ned": one_minus_ned(
-            predictions, ground_truths
-        ),
-        "component_error_rates": component_error_rates(
-            predictions, ground_truths
-        ),
-        "tone_confusion_matrix": tone_confusion_matrix(
-            predictions, ground_truths
-        ),
+        "word_accuracy": word_accuracy(predictions, ground_truths),
+        "one_minus_ned": one_minus_ned(predictions, ground_truths),
+        "component_error_rates": component_error_rates(predictions, ground_truths),
+        "tone_confusion_matrix": tone_confusion_matrix(predictions, ground_truths),
     }

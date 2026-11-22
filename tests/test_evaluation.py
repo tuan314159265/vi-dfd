@@ -81,7 +81,7 @@ def read_metrics(run_dir: Path) -> dict[str, dict]:
 
 def test_canonical_label_rules():
     assert evaluation.canonical_label("Việt Nam", TABLE, case_sensitive=False) == "việtnam"
-    assert evaluation.canonical_label("25°C", TABLE, case_sensitive=True) == "25|C"
+    assert evaluation.canonical_label("25°C", TABLE, case_sensitive=True) == "25�C"  # decision 4: U+FFFD, since "|" is a vocabulary class
     assert evaluation.canonical_label("ĐẸP", TABLE, case_sensitive=False) == "đẹp"
     assert evaluation.canonical_label("hoà", TABLE, case_sensitive=True) == "hoà"  # NFC, tone position kept
 
