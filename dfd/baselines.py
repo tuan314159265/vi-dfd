@@ -240,9 +240,10 @@ def run_baseline(config, repo, resume=None, smoke=False):
                 scaler.scale(loss).backward()
                 scaler.unscale_(optimizer)
                 nn.utils.clip_grad_norm_(model.parameters(), 20.)
+                previous_scale = scaler.get_scale()
                 scaler.step(optimizer)
                 scaler.update()
-                if scheduler:
+                if scheduler and scaler.get_scale() >= previous_scale:
                     scheduler.step()
                 if smoke:
                     break
