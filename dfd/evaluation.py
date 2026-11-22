@@ -121,14 +121,15 @@ def canonical_prediction(text: str, case_sensitive: bool) -> str:
 
 
 def insertions_deletions(predictions: list[str], labels: list[str]) -> tuple[int, int]:
-    """Total inserted and deleted characters over crops without the invalid marker."""
+    """Total inserted and deleted characters over every crop (decision 4: the same crops as the component ER).
+
+    Divide by the number of label characters for the insertion and deletion rates.
+    """
     inserted = deleted = 0
     for prediction, label in zip(predictions, labels):
-        if metrics.contains_invalid_character(prediction) or metrics.contains_invalid_character(label):
-            continue
-        for operation, _, _ in metrics.levenshtein_alignment(prediction, label):
-            inserted += operation == "insert"
-            deleted += operation == "delete"
+        counts = metrics.component_error_counts(prediction, label)
+        inserted += counts["insertions"]
+        deleted += counts["deletions"]
     return inserted, deleted
 
 

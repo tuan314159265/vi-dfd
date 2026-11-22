@@ -38,6 +38,9 @@ FAKE_TRAIN = textwrap.dedent('''
         (run / "checkpoints" / "last.ckpt").write_bytes(b"last")
         if mode == "two_best":
             (run / "checkpoints" / "best-epoch=04-validation_word_acc=0.7100.ckpt").write_bytes(b"best")
+        epochs = 1 if mode == "short" else config["training"]["epochs"]  # "short": stopped early, still "completed"
+        (run / "validation.csv").write_text("epoch,word_acc\\n" + "".join(f"{e},0.7\\n" for e in range(1, epochs + 1)),
+                                            encoding="utf-8")
     status = "smoke_completed" if a.smoke_test else ("interrupted" if mode == "interrupted" else "completed")
     (run / "metadata.json").write_text(json.dumps({"run_id": run.name, "status": status}), encoding="utf-8")
 ''')
@@ -46,7 +49,9 @@ FAKE_EVAL = textwrap.dedent('''
     from pathlib import Path
     p = argparse.ArgumentParser()
     p.add_argument("--run-dir"); p.add_argument("--checkpoint"); p.add_argument("--device")
+    p.add_argument("--data-root"); p.add_argument("--subset-dir")
     a = p.parse_args()
+    Path("eval_calls.log").open("a").write(str(a.data_root) + "\\n")
     if os.environ.get("FAKE_EVAL_FAIL"):
         raise SystemExit("ImportError: cannot import name 'DistilledPARSeq'")
     run = Path(a.run_dir)
@@ -60,7 +65,7 @@ FAKE_EVAL = textwrap.dedent('''
 
 def make_config(repo, name, variant="ti_dfd", kd=True, fake="ok", splits=("validation",), stage="tune"):
     config = {"experiment": "E2", "stage": stage, "variant": variant, "seed": 42, "fake": fake,
-              "distillation": {"enabled": kd}, "evaluation": {"splits": list(splits)}}
+              "distillation": {"enabled": kd}, "evaluation": {"splits": list(splits)}, "training": {"epochs": 3}}
     path = repo / "configs" / f"{name}.yaml"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(yaml.safe_dump(config), encoding="utf-8")
@@ -72,7 +77,7 @@ def repo(tmp_path):
     repo.mkdir()
     (repo / "train.py").write_text(FAKE_TRAIN, encoding="utf-8")
     (repo / "eval.py").write_text(FAKE_EVAL, encoding="utf-8")
-    (repo / ".gitignore").write_text("results/\ncalls.log\n__pycache__/\n", encoding="utf-8")
+    (repo / ".gitignore").write_text("results/\ncalls.log\neval_calls.log\n__pycache__/\n", encoding="utf-8")
     make_config(repo, "a_dfd")
     make_config(repo, "b_ce", variant="ti_ce", kd=False)
     git = ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.com"]
@@ -129,7 +134,8 @@ def test_changed_config_bytes_or_commit_means_not_done(repo, tmp_path):
 
 
 @pytest.mark.parametrize("fake, reason", [("crash", "exited with code 3"), ("interrupted", "status is 'interrupted'"),
-                                          ("two_best", "exactly one best"), ("no_rows", "no 'all' row")])
+                                          ("two_best", "exactly one best"), ("no_rows", "no 'all' row"),
+                                          ("short", "trained 1 of 3 epochs")])
 def test_bad_runs_fail_and_are_not_uploaded(repo, tmp_path, fake, reason, capsys):
     make_config(repo, "c_bad", fake=fake)
     commit_all(repo)
@@ -240,6 +246,19 @@ def test_failed_claim_blocks_other_workers_until_retry(repo, tmp_path, capsys):
     assert len((repo / "calls.log").read_text().splitlines()) == 2
 
 
+def test_own_failed_claim_blocks_the_same_worker_too(repo, tmp_path, capsys):
+    """19/11: a tab retrained a config whose eval had failed in that same tab, leaving two runs of one trial."""
+    make_config(repo, "c_bad", fake="crash")
+    commit_all(repo)
+    assert queue(repo, tmp_path, "configs/c_bad.yaml", extra=("--worker", "vinh-1")) == 1
+    capsys.readouterr()
+    assert queue(repo, tmp_path, "configs/c_bad.yaml", extra=("--worker", "vinh-1")) == 0
+    assert "blocked: failed on vinh-1" in capsys.readouterr().out
+    assert len((repo / "calls.log").read_text().splitlines()) == 1
+    assert queue(repo, tmp_path, "configs/c_bad.yaml", extra=("--worker", "vinh-1", "--retry-failed")) == 1
+    assert len((repo / "calls.log").read_text().splitlines()) == 2
+
+
 def test_interrupted_worker_drops_its_claim(repo, tmp_path, monkeypatch):
     def stop(*args, **kwargs):
         raise KeyboardInterrupt
@@ -343,10 +362,19 @@ def test_rescore_refuses_runs_it_cannot_attribute(repo, tmp_path, capsys):
     (rescue / "unknown_config" / "resolved.yaml").write_text(yaml.safe_dump({"variant": "ti_kd", "seed": 1}), encoding="utf-8")
     shutil.copytree(local, rescue / "interrupted")
     (rescue / "interrupted" / "metadata.json").write_text(json.dumps({**meta, "status": "interrupted"}), encoding="utf-8")
+    shutil.copytree(local, rescue / "short")  # "completed" after 1 of 3 epochs, like 20261119T153000Z_..._6e828460
+    (rescue / "short" / "validation.csv").write_text("epoch,word_acc\n1,0.7\n", encoding="utf-8")
     shutil.rmtree(tmp_path / "drive")
     capsys.readouterr()
     assert queue(repo, tmp_path, "configs/*.yaml", extra=("--rescore", str(rescue))) == 1
     out = capsys.readouterr().out
     assert "skipped: trained at ffffffffffff" in out and "skipped: matches 0 queue configs" in out
-    assert "status is 'interrupted'" in out
+    assert "status is 'interrupted'" in out and "trained 1 of 3 epochs" in out
     assert not drive_runs(tmp_path)
+
+
+def test_eval_uses_this_machines_data_not_the_training_path(repo, tmp_path):
+    """Runs trained on another VM keep their data.root (19/11: /content/vintext_notebook); eval.py must not use it."""
+    (tmp_path / "lmdb").mkdir()
+    assert queue(repo, tmp_path, "configs/a_dfd.yaml") == 0
+    assert (repo / "eval_calls.log").read_text().splitlines() == [str(tmp_path / "lmdb")]

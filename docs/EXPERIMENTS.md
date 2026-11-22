@@ -105,7 +105,7 @@ python eval.py --run-dir $RUN --checkpoint $RUN/checkpoints/best-*.ckpt --device
 
 Grid ở `configs/tuning.yaml`: DFD gồm τ ∈ {1, 2, 4} × λ ∈ {0,5; 1} × w_t ∈ {1, 2} (12 trial), KD thường gồm τ ∈ {1, 2, 4} × λ ∈ {0,25; 0,5; 1; 2} (12 trial). `ti_ce` và `ti_factorized` không có siêu tham số KD nên không tuning.
 
-Xong 24 trial: mọi người upload thư mục run. Vinh tải `resolved.yaml` và `metrics.csv` của 24 run về `results/runs/`, rồi chạy `python scripts/e2_tuning.py select`. Trial diverge vẫn giữ trong bảng, không chạy lại để thay. `select`, `lock` và `summarize_results.py` tự bỏ qua run smoke test (`--smoke-test`) và run có `status` khác `completed` trong `metadata.json` (bị ngắt, lỗi), và in lý do. Nếu một trial có hai run hoàn chỉnh (hai người cùng chạy), `lock` từ chối: giữ run xong trước, loại run kia bằng `--exclude <run_id>`, không chọn run tốt hơn. Danh sách run đã dùng và đã loại được ghi vào `configs/locked_hyperparameters.json`.
+Xong 24 trial: mọi người upload thư mục run. Vinh tải đủ `resolved.yaml`, `metadata.json`, `validation.csv` và `metrics.csv` của cả 24 run về đúng từng thư mục `results/runs/<run_id>/`. Thiếu `metadata.json` hoặc `validation.csv` thì run không đủ bằng chứng hoàn thành và bị bỏ qua khi select/lock, rồi chạy `python scripts/e2_tuning.py select`. Trial diverge vẫn giữ trong bảng, không chạy lại để thay. `select`, `lock` và `summarize_results.py` tự bỏ qua run smoke test (`--smoke-test`) run có `status` khác `completed` trong `metadata.json` (bị ngắt, lỗi), và run ghi `completed` nhưng `validation.csv` chưa tới epoch cuối (19/11 có một run như vậy: 5,7/20 epoch), và in lý do. Runner (`run_queue.py`, cả `--rescore`) cũng từ chối run thiếu epoch. Nếu một trial có hai run hoàn chỉnh (hai người cùng chạy), `lock` từ chối: giữ run xong trước, loại run kia bằng `--exclude <run_id>`, không chọn run tốt hơn. Danh sách run đã dùng và đã loại được ghi vào `configs/locked_hyperparameters.json`.
 
 **Khóa cấu hình (Vinh, một commit duy nhất, rồi đặt tag `exp-v2`):** ghi τ, λ, w_t đã chọn vào các config dưới đây. Sau commit này không ai sửa siêu tham số nữa.
 
@@ -283,4 +283,16 @@ Như vậy chênh lệch word acc so với full DFD **đúng bằng** số crop 
 
 ## Bàn giao kết quả KD tuning của Tuấn (20/11/2026)
 
-Đã hoàn tất và kiểm tra 12/12 trial KD thường trên `exp-v1`; xem [bảng kết quả và trạng thái artifact](RESULTS_E2_KD_TUNING.md). Chưa khóa siêu tham số hoặc tạo `exp-v2`. Upload Drive chưa được xác nhận.
+Đã hoàn tất và kiểm tra 12/12 trial KD thường trên `exp-v1`; xem [bảng kết quả và trạng thái artifact](RESULTS_E2_KD_TUNING.md). Đã khóa siêu tham số tại PR #4 và có tag `exp-v2`; KD τ=2, λ=1. Upload Drive chưa được xác nhận từ máy này.
+**9. Siêu tham số đã khóa (21/11).** `python scripts/e2_tuning.py lock` trên đủ 24 trial (12 DFD, 12 KD thường), cùng commit `exp-v1` (97604d7), mọi run đủ 20 epoch, không loại run nào. Kết quả ghi trong `configs/locked_hyperparameters.json`.
+
+| Biến thể | τ | λ | w_t | Run | Word acc val | 1-NED val | Hạng 2 |
+|---|---|---|---|---|---|---|---|
+| `ti_dfd` | 1 | 1 | 2 | `e9f45665` | 0,8775 | 0,9433 | τ2 λ0,5 w_t1: 0,8767 |
+| `ti_kd` | 2 | 1 | — | `84e95e78` | 0,8783 | 0,9431 | τ1 λ2: 0,8779 |
+
+- Chỉ τ của DFD đổi (2 → 1) trong 26 config; λ, w_t của DFD và τ, λ của KD thường trùng giá trị mặc định cũ.
+- Khoảng cách hạng 1 với hạng 2 rất nhỏ: 2 từ (DFD) và 1 từ (KD) trên 2.507 từ validation, nhỏ hơn dao động giữa các seed. Báo cáo phải nói lựa chọn này gần như hòa, theo đúng quy tắc chọn đã chốt trước.
+- τ = 4 kém rõ ở DFD (0,848–0,870), còn KD thường gần như không nhạy với τ, λ (0,8751–0,8783).
+- α_i tính trên phân phối tone của teacher đã làm mềm bởi τ (proposal 06), nên chọn τ = 1 cũng là chọn trọng số tone-confidence mạnh nhất. Ablation `temperature_sweep` và `no_tone_weight` không độc lập với nhau; ghi trong phần Method và Limitations.
+- Run KD `84e95e78` train ngày 17/11 (trước khi Tuấn xác nhận dữ liệu 18/11), nhưng `data_identity.json` trùng hoàn toàn với các run DFD (SHA-256 LMDB train/val, teacher), nên được tính.

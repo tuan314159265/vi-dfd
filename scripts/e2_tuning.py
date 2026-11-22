@@ -114,9 +114,31 @@ def run_problem(folder: Path, config: dict, allow_prepared: bool = False):
     if not meta.exists():
         return "metadata.json is missing"
     status = json.loads(meta.read_text(encoding="utf-8")).get("status")
-    if status == "completed" or (allow_prepared and status == "prepared"):
+    if allow_prepared and status == "prepared":
         return None
-    return f"status is {status!r}, not 'completed' (crashed, interrupted or still running)"
+    if status != "completed":
+        return f"status is {status!r}, not 'completed' (crashed, interrupted or still running)"
+    return short_training(folder, config)
+
+
+def short_training(folder: Path, config: dict):
+    """Why a "completed" run did not train all its epochs (None if it did, or if there is nothing to check).
+
+    A run can end with status "completed" after fewer epochs than configured (seen on Colab on 19/11: 5.7 of 20
+    epochs). validation.csv has one row per finished epoch, numbered from 1, and a resumed run continues the
+    numbering, so the last row must be `training.epochs`.
+    """
+    epochs = (config.get("training") or {}).get("epochs")
+    path = folder / "validation.csv"
+    if not epochs:
+        return "training.epochs is missing, cannot confirm training completion"
+    if not path.is_file():
+        return f"validation.csv is missing, cannot confirm it trained {epochs} epochs"
+    with path.open(encoding="utf-8", newline="") as handle:
+        last = max((int(row["epoch"]) for row in csv.DictReader(handle) if row.get("epoch")), default=0)
+    if last < int(epochs):
+        return f"trained {last} of {epochs} epochs although its status is 'completed'"
+    return None
 
 
 def read_runs(runs_dir: Path, split: str, exclude=(), policy=None) -> list[dict]:

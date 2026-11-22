@@ -81,7 +81,7 @@ def read_metrics(run_dir: Path) -> dict[str, dict]:
 
 def test_canonical_label_rules():
     assert evaluation.canonical_label("Việt Nam", TABLE, case_sensitive=False) == "việtnam"
-    assert evaluation.canonical_label("25°C", TABLE, case_sensitive=True) == "25|C"
+    assert evaluation.canonical_label("25°C", TABLE, case_sensitive=True) == "25�C"  # decision 4: U+FFFD, since "|" is a vocabulary class
     assert evaluation.canonical_label("ĐẸP", TABLE, case_sensitive=False) == "đẹp"
     assert evaluation.canonical_label("hoà", TABLE, case_sensitive=True) == "hoà"  # NFC, tone position kept
 
@@ -168,3 +168,19 @@ def test_checkpoint_mode_with_factorized_student(data, run_dir, tmp_path):
     assert int(rows["all"]["params"]) == sum(parameter.numel() for parameter in system.parameters())
     info = json.loads((run_dir / "eval_info.json").read_text(encoding="utf-8"))
     assert info["checkpoint_sha256"] and info["vocabulary_fingerprint"] == TABLE.fingerprint()
+
+
+def test_eval_puts_parseq_on_the_path_before_loading_a_checkpoint(tmp_path, monkeypatch):
+    """eval.py must call activate_upstream itself: on 19/11 every Colab eval failed with strhub missing."""
+    import dfd.parseq
+
+    calls = []
+
+    def fake_activate(root=None):
+        calls.append(root)
+        raise RuntimeError("stop after activation")
+
+    monkeypatch.setattr(dfd.parseq, "activate_upstream", fake_activate)
+    with pytest.raises(RuntimeError, match="stop after activation"):
+        eval_cli.main(["--run-dir", str(tmp_path), "--checkpoint", str(tmp_path / "best.ckpt")])
+    assert calls == [None]

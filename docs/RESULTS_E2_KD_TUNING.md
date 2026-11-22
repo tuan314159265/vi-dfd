@@ -23,7 +23,7 @@
 
 ## Lựa chọn sơ bộ
 
-Theo word accuracy validation rồi 1-NED, tốt nhất trong 12 trial KD là **τ=2, λ=1**, word accuracy **87.8341%**. Chưa chạy `lock` hoặc tạo `exp-v2`; Vinh cần tổng hợp cùng 12 trial DFD theo kế hoạch chung.
+Theo word accuracy validation rồi 1-NED, tốt nhất trong 12 trial KD là **τ=2, λ=1**, word accuracy **87.8341%**. Vinh đã tổng hợp 24 trial và khóa tại PR #4 ngày 21/11. Tag `exp-v2` đã có: KD τ=2, λ=1; DFD τ=1, λ=1, w_t=2. Các lựa chọn KD trong bảng này vẫn giữ nguyên.
 
 ## Bàn giao artifact
 
@@ -36,5 +36,9 @@ Theo word accuracy validation rồi 1-NED, tốt nhất trong 12 trial KD là **
 ## Tiếp theo
 
 1. Upload artifact, cập nhật sheet theo dõi.
-2. Vinh gom KD và DFD, kiểm tra rồi khóa siêu tham số, commit và đặt `exp-v2`.
-3. Tuấn chạy KD seed 43/44 và E3 theo phân công sau khi có tag mới. E1 VietOCR/CRNN và phần xuất ONNX/benchmark vẫn là công việc riêng.
+2. Đã xong: Vinh gom KD và DFD, khóa siêu tham số tại PR #4 và đặt `exp-v2`.
+3. Tuấn chạy KD seed 43/44 và E3 joint KD seed 42/43/44, marginal + joint seed 42 từ `exp-v2`. E1 VietOCR/CRNN và phần xuất ONNX/benchmark vẫn là công việc riêng.
+
+## Cập nhật sau PR #5
+
+Main đã cập nhật metrics theo quyết định 4: invalid marker U+FFFD, mẫu số component ER theo ký tự nhãn, insert/delete báo riêng. Word accuracy và cấu hình thắng không đổi. Các giá trị 1-NED/ER ở artifact exp-v1 chưa được xác nhận chấm lại bằng metrics mới, nên không dùng chúng làm bảng cuối trước khi re-evaluate. Upload Drive vẫn chưa được xác minh từ máy này.
