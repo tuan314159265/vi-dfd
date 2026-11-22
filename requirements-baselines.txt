@@ -1,0 +1,3 @@
+# Install the existing GPU stack first: requirements-teacher.txt.
+# VietOCR source is activated from VIETOCR_ROOT at the revision in dfd/baselines.py.
+einops==0.8.1
