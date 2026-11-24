@@ -36,3 +36,5 @@ Each full run exports/scorers validation automatically. To produce test/unseen p
 CRNN và VietOCR đã hoàn tất 20 epoch và chấm validation; xem [RESULTS_E1_BASELINES.md](RESULTS_E1_BASELINES.md). Chưa chấm test/unseen_test hoặc đo latency.
 
 Full test/unseen scores are now recorded in RESULTS_E1_BASELINES.md. The new export command reloads the selected checkpoint without downloading pretrained weights or retraining.
+
+Checkpoint filenames use zero-based epochs; `validation.csv` uses one-based epochs (for example, `epoch=19` corresponds to epoch 20 in the CSV).

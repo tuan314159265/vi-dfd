@@ -18,6 +18,7 @@ from dfd.vietchar import DecompositionTable
 
 VIETOCR_COMMIT = 'fe8c3a7fc714aec57ab81cec844eb3adf0c1636c'
 VIETOCR_WEIGHTS = 'https://vocr.vn/data/vietocr/vgg_seq2seq.pth'
+VIETOCR_WEIGHTS_SHA256 = '0921503a41375a0584268e23ef3d414ea478a8fe8777865c7745d38f2d0bc5db'
 
 
 def digest(path):
@@ -26,6 +27,14 @@ def digest(path):
         for chunk in iter(lambda: f.read(1 << 20), b''):
             h.update(chunk)
     return h.hexdigest()
+
+
+def verify_vietocr_weights(path):
+    actual = digest(path)
+    if actual != VIETOCR_WEIGHTS_SHA256:
+        raise ValueError(f'VietOCR weights SHA-256 mismatch for {path}: '
+                         f'expected {VIETOCR_WEIGHTS_SHA256}, found {actual}')
+    return actual
 
 
 class CRNN(nn.Module):
@@ -110,12 +119,15 @@ class VietOCRAdapter(nn.Module):
         if pretrained:
             if checkpoint:
                 path = Path(checkpoint).expanduser()
-                state = torch.load(path, map_location='cpu', weights_only=True)
             else:
-                state = torch.hub.load_state_dict_from_url(VIETOCR_WEIGHTS, map_location='cpu', weights_only=True)
                 path = Path(torch.hub.get_dir()) / 'checkpoints' / VIETOCR_WEIGHTS.rsplit('/', 1)[-1]
+                if not path.is_file():
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    torch.hub.download_url_to_file(VIETOCR_WEIGHTS, str(path))
+            weights_sha256 = verify_vietocr_weights(path)
+            state = torch.load(path, map_location='cpu', weights_only=True)
             self.model.load_state_dict(state, strict=True)
-            self.initialization.update(weights_sha256=digest(path), weights_source=str(path))
+            self.initialization.update(weights_sha256=weights_sha256, weights_source=str(path))
 
     def loss(self, images, labels):
         sequences = [self.vocab.encode(text) for text in labels]

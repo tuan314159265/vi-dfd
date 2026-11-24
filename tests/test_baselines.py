@@ -30,5 +30,24 @@ def test_validation_retains_unsupported_and_long_labels():
 def test_prediction_csv_keeps_source_id_and_unicode(tmp_path):
     path = tmp_path / 'validation.csv'
     write_predictions(path, [('2:5', 'ấ', 'ầ'), ('3:7', 'a', '')])
-    assert list(csv.DictReader(path.open())) == [
+    assert list(csv.DictReader(path.open(encoding='utf-8'))) == [
         {'source_id': '2:5', 'prediction': 'ầ'}, {'source_id': '3:7', 'prediction': ''}]
+
+
+def test_vietocr_weights_reject_wrong_checksum(tmp_path):
+    from dfd.baselines import verify_vietocr_weights
+    path = tmp_path / 'weights.pth'
+    path.write_bytes(b'corrupt weights')
+    with pytest.raises(ValueError, match='SHA-256 mismatch'):
+        verify_vietocr_weights(path)
+
+
+def test_vietocr_weights_accept_matching_checksum(tmp_path, monkeypatch):
+    import hashlib
+    from dfd import baselines
+    path = tmp_path / 'weights.pth'
+    content = b'test fixture weights'
+    path.write_bytes(content)
+    expected = hashlib.sha256(content).hexdigest()
+    monkeypatch.setattr(baselines, 'VIETOCR_WEIGHTS_SHA256', expected)
+    assert baselines.verify_vietocr_weights(path) == expected
