@@ -39,3 +39,15 @@ Validation có 2.507 mẫu; nhóm nhiều dấu 183, ảnh nhỏ 489, tổ hợp
 Các thư mục `results/runs/<run_id>/` chứa checkpoint best `.pt`, resolved.yaml, metadata, initialization provenance, data_identity.json, validation.csv, training.json, baseline_predictions/, predictions/, metrics.csv và eval_info.json. Artifact ở local; chưa xác nhận upload Drive. Không commit checkpoint, dự đoán hoặc dữ liệu vào Git.
 
 Cần bàn giao hai thư mục run qua Drive private và chấm test/unseen_test bằng checkpoint tốt nhất khi hoàn thiện lệnh export baseline. Chưa có số liệu latency/ONNX. Xem [hướng dẫn baseline](BASELINES.md).
+
+
+## Cập nhật 24/11: đã chấm đủ test/unseen
+
+Dùng đúng checkpoint tốt nhất đã chọn từ validation, không train lại hoặc chọn lại bằng test. Lệnh: `scripts/eval_baseline.py`, tham số `--splits validation test unseen_test`. Mỗi model có đủ 12 dòng metrics (3 split × 4 subset), dự đoán đủ 2.507/7.201/10.068 mẫu. Các thông tin “chưa chấm test/unseen” phía trên mô tả trạng thái trước cập nhật này.
+
+| Model | Validation (%) | Test (%) | Unseen (%) |
+|---|---|---|---|
+| CRNN | 63.3028 | 58.1447 | 61.2932 |
+| VietOCR | 84.6031 | 79.6001 | 83.1049 |
+
+Bản bàn giao local đầy đủ ở `../e1_completed/<run_id>/`. Upload chưa thực hiện: connector Drive trả 404 cho thư mục nhóm, browser host không khả dụng.

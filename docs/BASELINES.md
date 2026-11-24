@@ -28,9 +28,11 @@ python train.py --config configs/runs/E1/crnn_s42.yaml --data-root "$DATA"
 python train.py --config configs/runs/E1/vietocr_s42.yaml --data-root "$DATA"
 ```
 
-Each full run exports/scorers validation automatically. To produce test/unseen predictions later, use the saved checkpoint with a baseline-specific export command (not yet provided); do not tune against test. No ONNX export is included in this implementation.
+Each full run exports/scorers validation automatically. To produce test/unseen predictions later, use `python scripts/eval_baseline.py --run-dir <run> --data-root <data> --splits validation test unseen_test`; do not tune against test. No ONNX export is included in this implementation.
 
 
 ## Kết quả local đã kiểm tra
 
 CRNN và VietOCR đã hoàn tất 20 epoch và chấm validation; xem [RESULTS_E1_BASELINES.md](RESULTS_E1_BASELINES.md). Chưa chấm test/unseen_test hoặc đo latency.
+
+Full test/unseen scores are now recorded in RESULTS_E1_BASELINES.md. The new export command reloads the selected checkpoint without downloading pretrained weights or retraining.
