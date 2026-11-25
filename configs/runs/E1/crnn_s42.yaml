@@ -6,7 +6,7 @@ seed: 42
 model:
   backbone: crnn
   head: joint
-  pretrained: true
+  pretrained: false  # Local CNN + BiLSTM CTC baseline, trained from scratch.
   teacher_backbone: null
   teacher_checkpoint: null
   eos_policy: eos_class_0_none_level

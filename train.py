@@ -64,9 +64,15 @@ def main() -> int:
             from dfd.student import run_student
             run_student(config, Path(__file__).resolve().parent, args.resume, args.smoke_test)
             return 0
+        if config["variant"] in ("vietocr", "crnn") and config.get("stage", "train") == "train":
+            if unresolved:
+                parser.error("Unresolved training fields: " + ", ".join(unresolved))
+            from dfd.baselines import run_baseline
+            run_baseline(config, Path(__file__).resolve().parent, args.resume, args.smoke_test)
+            return 0
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         parser.error(str(exc))
-    parser.error("Only the PARSeq-S teacher and PARSeq-Ti students can be trained; see docs/IMPLEMENTATION.md")
+    parser.error("Unsupported training variant/stage; see docs/IMPLEMENTATION.md")
     return 2
 
 
