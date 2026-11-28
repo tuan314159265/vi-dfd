@@ -1,13 +1,28 @@
 # Kết quả E1 — CRNN và VietOCR
 
-Kiểm tra ngày 23/11/2026. Cả hai baseline đã hoàn tất 20 epoch, seed 42, trên dữ liệu VinText của Tiến. Chọn checkpoint theo validation word accuracy; chưa chấm test hoặc unseen_test.
+Cập nhật ngày 28/11/2026 (train hoàn tất ngày 23/11, chấm đủ split ngày 24/11). Cả hai baseline đã hoàn tất 20 epoch, seed 42, trên dữ liệu VinText của Tiến. Checkpoint tốt nhất được chọn hoàn toàn theo `validation` word accuracy (không train lại hoặc chọn lại theo test), sau đó chấm đầy đủ cả ba split `validation` (2.507 mẫu), `test` (7.201 mẫu), và `unseen_test` (10.068 mẫu) bằng `scripts/eval_baseline.py` với `eval.py` chung theo quyết định 4.
 
-| Model | Validation all (%) | Diacritic-heavy (%) | Small crops (%) | Rare combinations (%) |
-|---|---|---|---|---|
-| CRNN | 63.3028 | 68.3060 | 46.6258 | 16.6667 |
-| VietOCR | 84.6031 | 90.7104 | 66.4622 | 50.0000 |
+## Tổng hợp word accuracy trên tập `all`
 
-Validation có 2.507 mẫu; nhóm nhiều dấu 183, ảnh nhỏ 489, tổ hợp hiếm chỉ 6. Không kết luận mạnh từ nhóm hiếm. Train giữ 23.267/23.269 mẫu sau lọc ký tự ngoài vocabulary.
+| Model | Validation (%) | Test (%) | Unseen test (%) |
+|---|---:|---:|---:|
+| CRNN | 63.3028 | 58.1447 | 61.2932 |
+| VietOCR | 84.6031 | 79.6001 | 83.1049 |
+
+## Chi tiết theo split và subset
+
+Mỗi model có đủ 12 dòng trong `metrics.csv` (3 split × 4 subset).
+
+| Model | Split | All (%) | Diacritic-heavy (%) | Small crops (%) | Rare combinations (%) | Base ER (%) | Mod ER (%) | Tone ER (%) |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| CRNN | validation | 63.3028 | 68.3060 | 46.6258 | 16.6667 | 8.2999 | 2.4303 | 3.2332 |
+| CRNN | test | 58.1447 | 63.2027 | 46.2136 | 12.5000 | 8.7890 | 2.7321 | 3.8056 |
+| CRNN | unseen_test | 61.2932 | 66.8814 | 45.0418 | 27.2727 | 7.9035 | 2.5574 | 3.6438 |
+| VietOCR | validation | 84.6031 | 90.7104 | 66.4622 | 50.0000 | 3.9926 | 0.9222 | 1.4755 |
+| VietOCR | test | 79.6001 | 85.1789 | 68.0906 | 62.5000 | 5.9637 | 1.4350 | 2.4526 |
+| VietOCR | unseen_test | 83.1049 | 86.3402 | 66.2839 | 69.6970 | 4.3457 | 1.0542 | 1.7345 |
+
+Số lượng mẫu theo split (`all` / `diacritic_heavy` / `small_crops` / `rare_combinations`): validation 2.507 / 183 / 489 / 6; test 7.201 / 587 / 1.545 / 24; unseen_test 10.068 / 776 / 1.916 / 33. Nhóm `rare_combinations` rất ít mẫu nên không dùng để rút ra kết luận mạnh. Tập train giữ 23.267/23.269 mẫu sau lọc ký tự ngoài vocabulary.
 
 ## CRNN
 
@@ -29,25 +44,14 @@ Validation có 2.507 mẫu; nhóm nhiều dấu 183, ảnh nhỏ 489, tổ hợp
 
 - Recipe: 20 epoch, batch 64, AdamW + OneCycleLR, photometric augmentation, AMP trên CUDA; xem YAML resolved trong từng run.
 - CRNN là baseline local CNN + 2-layer BiLSTM256 + CTC, khởi tạo ngẫu nhiên; không nhận là tái lập một checkpoint CRNN pretrained cụ thể. Greedy CTC collapse.
-- VietOCR vgg_seq2seq dùng pretrained tiếng Việt upstream và vocabulary gốc; fine-tune bằng CE teacher forcing, greedy decoding. Cần công bố khác biệt dữ liệu pretraining so với PARSeq.
-- Cả hai dùng cùng pipeline ảnh crop 32×128; VietOCR chuyển tensor về [0,1]. Validation giữ toàn bộ mẫu, chấm case-insensitive bằng eval.py chung với metrics theo quyết định 4.
-- Đây là kết quả trên nhánh triển khai E1, không phải run tại exp-v1/exp-v2; không thay đổi các tag chung.
+- VietOCR `vgg_seq2seq` dùng pretrained tiếng Việt upstream và vocabulary gốc; fine-tune bằng CE teacher forcing, greedy decoding. Cần công bố rõ khác biệt dữ liệu pretraining so với PARSeq khi viết báo cáo.
+- Cả hai dùng cùng pipeline ảnh crop 32×128; VietOCR chuyển tensor về [0,1]. Validation/test/unseen_test giữ toàn bộ mẫu, chấm case-insensitive bằng `eval.py` chung với metrics theo quyết định 4 (`scripts/eval_baseline.py --splits validation test unseen_test`).
+- Đây là kết quả trên nhánh triển khai E1 (`feat/e1-baselines`), không phải run tại `exp-v1`/`exp-v2`; không thay đổi các tag chung.
 - Các run smoke và run CRNN bị dừng khi sửa scheduler không tính vào kết quả.
 
 ## Artifact và việc tiếp theo
 
-Các thư mục `results/runs/<run_id>/` chứa checkpoint best `.pt`, resolved.yaml, metadata, initialization provenance, data_identity.json, validation.csv, training.json, baseline_predictions/, predictions/, metrics.csv và eval_info.json. Artifact ở local; chưa xác nhận upload Drive. Không commit checkpoint, dự đoán hoặc dữ liệu vào Git.
-
-Cần bàn giao hai thư mục run qua Drive private và chấm test/unseen_test bằng checkpoint tốt nhất khi hoàn thiện lệnh export baseline. Chưa có số liệu latency/ONNX. Xem [hướng dẫn baseline](BASELINES.md).
-
-
-## Cập nhật 24/11: đã chấm đủ test/unseen
-
-Dùng đúng checkpoint tốt nhất đã chọn từ validation, không train lại hoặc chọn lại bằng test. Lệnh: `scripts/eval_baseline.py`, tham số `--splits validation test unseen_test`. Mỗi model có đủ 12 dòng metrics (3 split × 4 subset), dự đoán đủ 2.507/7.201/10.068 mẫu. Các thông tin “chưa chấm test/unseen” phía trên mô tả trạng thái trước cập nhật này.
-
-| Model | Validation (%) | Test (%) | Unseen (%) |
-|---|---|---|---|
-| CRNN | 63.3028 | 58.1447 | 61.2932 |
-| VietOCR | 84.6031 | 79.6001 | 83.1049 |
-
-Bản bàn giao local đầy đủ ở `../e1_completed/<run_id>/`. Upload chưa thực hiện: connector Drive trả 404 cho thư mục nhóm, browser host không khả dụng.
+- Mỗi thư mục run chứa checkpoint best `.pt`, `resolved.yaml`, `metadata.json`, initialization provenance, `data_identity.json`, `validation.csv`, `training.json`, `baseline_predictions/`, `predictions/`, `metrics.csv` (đủ 12 dòng) và `eval_info.json`.
+- Bản bàn giao local đầy đủ nằm ở `../e1_completed/<run_id>/`. Không commit checkpoint, dự đoán hoặc dữ liệu vào Git.
+- Upload Drive private nhóm chưa được xác nhận (trước đó connector Drive trả 404 và browser host không khả dụng); cần bàn giao hai thư mục trên lên Drive nhóm theo quy ước `runs/<run_id>/`.
+- Chưa có số liệu ONNX/latency cho CRNN và VietOCR. Xem thêm [hướng dẫn baseline](BASELINES.md).
